@@ -8,32 +8,36 @@ from datasets import Dataset, load_dataset
 from datasets.data_files import EmptyDatasetError
 from dotenv import dotenv_values
 from huggingface_hub import login
+from tqdm import tqdm
 from synthetic_data.tasks import (
+    DPODataTask,
     PromptUpsample,
-    SyntheticDataTask,
+    SFTDataTask,
     Toolformer,
     SyntheticToolCalls,
+    SquadExtractiveQA
 )
 
 from synthetic_data.generation import (
     GenerationWrapper,
     GroqGenerationWrapper,
+    AnthropicGenerationWrapper,
     OpenAIGenerationWrapper,
     OpenRouterGenerationWrapper,
     VLLMWrapper,
     upload_dataset,
 )
 from synthetic_data.utils import (
-    DatasetTaskFormat,
     GenerationSource,
     SeedDataFormat,
     print_result_dicts,
 )
 
-DATA_TASKS: Dict[str, type[SyntheticDataTask]] = {
+DATA_TASKS: Dict[str, type[SFTDataTask]] = {
     "toolformer": Toolformer,
     "prompt_upsample": PromptUpsample,
     "synthetic_tool_calls": SyntheticToolCalls,
+    "squad_extractive_qa": SquadExtractiveQA,
 }
 
 MODEL_WRAPPER_CLASSES = {
@@ -41,19 +45,20 @@ MODEL_WRAPPER_CLASSES = {
     GenerationSource.VLLM: VLLMWrapper,
     GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
     GenerationSource.GROQ: GroqGenerationWrapper,
+    GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
 }
 
 
 def main(
     # n batches
     upload_every: int = 10,
-    batch_size: int = 8,
+    batch_size: int = 4,
     restart: bool = False,
     pairs: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.OPENAI,
-    task_name: str = "synthetic_tool_calls",
-    n_epochs: int = 10,
+    generation_source: GenerationSource = GenerationSource.ANTHROPIC,
+    task_name: str = "squad_extractive_qa",
+    n_epochs: int = 1,
     **kwargs,
 ):
     """
@@ -66,8 +71,9 @@ def main(
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
     task = DATA_TASKS[task_name]()
+    is_dpo_task = isinstance(task, DPODataTask)
 
-    if pairs and task.dataset_task_format != DatasetTaskFormat.DPO:
+    if pairs and not isinstance(task, DPODataTask):
         raise ValueError("generate_pairs is only supported for DPO tasks.")
 
     print("Logging into the Hub...")
@@ -80,7 +86,7 @@ def main(
     model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
 
     empty_dataset_format = (
-        task.empty_dpo_dataset_format if pairs else task.empty_dataset_format
+        task.empty_dpo_dataset_format if pairs and is_dpo_task else task.empty_dataset_format
     )
 
     print("Loading output dataset...")
@@ -91,7 +97,7 @@ def main(
             output_dataset = cast(
                 Dataset,
                 load_dataset(
-                    f"{task.dataset_org}/{task.output_dataset_name}",
+                    f"{task.output_dataset_org}/{task.output_dataset_name}",
                     split="train",
                 ),
             )
@@ -102,12 +108,12 @@ def main(
 
     input_dataset: Dataset
     input_dataset_location: Optional[str] = None
-    if task.dpo_seed_cache_dataset_name and pairs:
+    if is_dpo_task and task.dpo_seed_cache_dataset_name and pairs:
         input_dataset_location = (
-            f"{task.dataset_org}/{task.dpo_seed_cache_dataset_name}"
+            f"{task.output_dataset_org}/{task.dpo_seed_cache_dataset_name}"
         )
     elif task.seed_data_format == SeedDataFormat.HF_DATASET:
-        input_dataset_location = f"{task.dataset_org}/{task.seed_data_location}"
+        input_dataset_location = task.seed_data_location
     elif task.seed_data_format == SeedDataFormat.TSV:
         input_dataset_location = task.seed_data_location
 
@@ -121,6 +127,7 @@ def main(
         or pairs
     ):
         if len(output_dataset) > 0 and resume_input_position:
+            print(f"Resuming from position {len(output_dataset)}")
             split = f"train[{len(output_dataset)}:]"
         input_dataset = cast(Dataset, load_dataset(input_dataset_location, split=split))
     elif task.seed_data_format == SeedDataFormat.TSV:
@@ -134,16 +141,15 @@ def main(
     print("Running...")
 
     for i in range(n_epochs):
-        if pairs:
-            # Generate negative pairs for toolformer
-            # task, definition, tool_call, call_result, agent_output
+
+        # If we are generating the completion pair, i.e. the second step for DPO
+        if is_dpo_task and pairs:
             for batch_idx, batch in enumerate(
                 input_dataset.iter(batch_size=batch_size)
             ):
                 batch = cast(Dict, batch)
                 full_conversations_batch = task.format_dpo_input_conversations(batch)
 
-                print(f"Generating {len(full_conversations_batch)} completions...")
                 completions = asyncio.run(
                     model_wrapper.generate(full_conversations_batch)
                 )
@@ -157,17 +163,17 @@ def main(
                     )
         else:
             for batch_idx, batch in enumerate(
-                input_dataset.iter(batch_size=batch_size)
+                tqdm(input_dataset.iter(batch_size=batch_size))
             ):
                 batch = cast(Dict, batch)
-                full_conversations_batch = task.format_seed_input_conversation(batch)
+                full_conversations_batch = task.format_input_conversation(batch)
 
                 print(f"Generating {len(full_conversations_batch)} completions...")
                 completions = asyncio.run(
                     model_wrapper.generate(full_conversations_batch)
                 )
 
-                output_rows_batch = task.get_seed_dataset_output_rows_batch(completions)
+                output_rows_batch = task.format_output_rows(completions)
                 print_result_dicts(output_rows_batch)
                 new_dataset_rows.extend(output_rows_batch)
                 if batch_idx % upload_every == 0 and batch_idx > 0:

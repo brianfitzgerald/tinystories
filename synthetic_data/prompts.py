@@ -1,4 +1,6 @@
 from synthetic_data.generation import Conversation
+from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
+import json
 
 
 def format_dalle_prompt_template(user_prompt: str) -> Conversation:
@@ -49,6 +51,45 @@ There are a few rules to follow:
         {"role": "user", "content": last_msg_content},
     ]
     return user_conversation
+
+
+def format_squad_extractive_json_template(context: str) -> Conversation:
+    """
+    Prepares the system and user-assistant style messages for inference.
+
+    Example messages come from the SQuAD dataset:
+    https://rajpurkar.github.io/SQuAD-explorer/
+    """
+    system_message: ChatCompletionMessageParam = {
+        "role": "system",
+        "content": "Give an example of structured data extraction from the following context in JSON form. Limit to only factual information about the subjects of the context, such as names, dates, locations, and numbers.",
+    }
+
+    example_context = """
+In his native Poland, in France, where he composed most of his works, and beyond, Chopin's music, his status as one of music's earliest superstars, his association (if only indirect) with political insurrection, his love life and his early death have made him, in the public consciousness, a leading symbol of the Romantic era. His works remain popular, and he has been the subject of numerous films and biographies of varying degrees of historical accuracy.
+"""
+
+    example_json_output = {
+        "composer": "Frédéric Chopin",
+        "locations": ["Poland", "France"],
+        "category": "Romantic era",
+    }
+
+    return [
+        system_message,
+        {
+            "role": "user",
+            "content": example_context,
+        },
+        {
+            "role": "assistant",
+            "content": json.dumps(example_json_output),
+        },
+        {
+            "role": "user",
+            "content": context,
+        },
+    ]
 
 
 CONVERT_WEIGHT_API_EXAMPLE = {

@@ -1,15 +1,28 @@
 import asyncio
 from enum import Enum
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional, Union, Any
+import json
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tabulate import tabulate
 from pydantic.dataclasses import dataclass
+from pydantic import Json
 
 
 Conversation = List[ChatCompletionMessageParam]
 ShareGPTConversation = List[Dict[str, str]]
+
+JSONSchemaKey = Union[str, int, float, bool, List[Any], Dict[str, Any]]
+JSONSchema = Dict[str, JSONSchemaKey]
+
+
+@dataclass
+class SquadExtractiveQARow:
+    id: str
+    context: str
+    json_schema: JSONSchema
+    fields: List[str]
 
 
 @dataclass
@@ -52,16 +65,12 @@ class SyntheticToolCallDPORow:
     agent_output_rejected: str
 
 
-class DatasetTaskFormat(str, Enum):
-    SFT = "SFT"
-    DPO = "DPO"
-
-
 class GenerationSource(str, Enum):
     OPENAI = "openai"
     VLLM = "vllm"
     OPENROUTER = "openrouter"
     GROQ = "groq"
+    ANTHROPIC = "anthropic"
 
 
 class SeedDataFormat(Enum):
@@ -71,10 +80,19 @@ class SeedDataFormat(Enum):
     SYNTHETIC = "synthetic"
 
 
-def clean_message(message: str) -> str:
+def clean_message(message: JSONSchemaKey):
     """
     Clean up spaces, tabs, and newlines in a message with a JSON dict, so the dict is formatted nicely.
     """
+
+    if isinstance(message, list):
+        message = ", ".join(message)
+    elif isinstance(message, bool):
+        message = str(message)
+    elif isinstance(message, (int, float)):
+        message = str(message)
+    elif isinstance(message, dict):
+        message = json.dumps(message, indent=2)
 
     # Handle odd edge case where textwrap evaluates the value as a bool
     if message == "True" or message == "False":
@@ -86,7 +104,7 @@ def clean_message(message: str) -> str:
 
 
 def print_result_dicts(
-    results: List[Dict],
+    results: List[JSONSchema],
 ):
     if len(results) == 0:
         print("No results found, skipping print.")
@@ -98,7 +116,8 @@ def print_result_dicts(
 
     col_widths = [35] * len(columns)
     for i, column in enumerate(columns):
-        if results[0][column].isdigit():
+        col = results[0][column]
+        if isinstance(col, str) and col.isdigit():
             col_widths[i] = 10
 
     print(
@@ -164,6 +183,36 @@ def clean_example(text):
         r"1\. Scenario:.*?Example API Call:|```.*?```", "", text, flags=re.DOTALL
     )
     return cleaned_paragraph.strip()
+
+
+JSON_MATCH_PATTERN = r"{.*}"
+
+
+def recursive_json_parse(data: str) -> Optional[Union[Dict, str]]:
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return data
+
+    if isinstance(data, dict):
+        return {key: recursive_json_parse(value) for key, value in data.items()}
+    return data
+
+
+def extract_json(msg: str) -> Optional[JSONSchema]:
+    """
+    Parse out JSON from a string, and return the parsed JSON object.
+    Works even if the JSON is embedded deep in a string or with recursive serialization.
+    """
+    msg = msg.replace("'", "").replace("\n", "")
+    match = re.search(JSON_MATCH_PATTERN, msg)
+
+    if match:
+        json_str = match.group(0)
+        json_obj = recursive_json_parse(json_str)
+        return json_obj  # type: ignore
+    return None
 
 
 async def gather_with_concurrency_limit(n: int, *coros):

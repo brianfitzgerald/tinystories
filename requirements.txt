@@ -20,5 +20,5 @@ diffusers==0.26.3
 accelerate
 matplotlib
 openai
-bitsandbytes==0.43.0
 unidecode
+anthropic

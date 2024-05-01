@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 import openai
 from openai.types.chat.chat_completion import ChatCompletion
-from typing import List, Dict
+from typing import List, Dict, cast
 from datasets import Dataset, concatenate_datasets
-from transformers.tokenization_utils_base import AutoTokenizerBase
-import asyncio
+from anthropic.types.message_param import MessageParam
+from anthropic.types.message import Message
+from anthropic import AsyncAnthropic, AnthropicError
 
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
@@ -32,8 +33,6 @@ class GenerationWrapper(ABC):
     """
     Abstract method for various ways of generating data.
     """
-
-    tokenizer: AutoTokenizerBase
 
     @abstractmethod
     async def generate(self, conversations: List[Conversation]) -> List[str]:
@@ -119,3 +118,43 @@ class GroqGenerationWrapper(OpenAIGenerationWrapper):
             base_url="https://api.groq.com/openai/v1",
         )
         self.model_name = "mixtral-8x7b-32768"
+
+
+class AnthropicGenerationWrapper(GenerationWrapper):
+    def __init__(self, dotenv: Dict[str, str]):
+        api_key = dotenv.get("ANTHROPIC_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                "ANTHROPIC_API_KEY is required for AnthropicGenerationWrapper"
+            )
+        self.client = AsyncAnthropic(
+            api_key=api_key,
+        )
+
+    async def generate(self, conversations: List[Conversation]) -> List[str]:
+        try:
+            completion_requests = []
+            for conversation in conversations:
+                if conversation[0]["role"] == "system":
+                    system_prompt = conversation[0]["content"]
+                    conversation = conversation[1:]
+                conversation = cast(List[MessageParam], conversation)
+                request = self.client.messages.create(
+                    model="claude-3-sonnet-20240229",
+                    system=system_prompt,
+                    messages=conversation,
+                    max_tokens=512,
+                )
+                completion_requests.append(request)
+            results: List[Message] = await gather_with_concurrency_limit(
+                4, *completion_requests
+            )
+            completions = [
+                result.content[0].text
+                for result in results
+                if result.content is not None
+            ]
+            return completions
+        except AnthropicError as e:
+            print(f"Error while generating: {e}")
+            return []
