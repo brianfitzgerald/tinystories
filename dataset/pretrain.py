@@ -1,14 +1,12 @@
 from datasets import load_dataset, concatenate_datasets, Dataset, ReadInstruction
 from typing import Optional, Tuple
 
-from transformers.data.data_collator import DataCollatorForLanguageModeling
 from transformers.tokenization_utils import PreTrainedTokenizer
 from model.utils import ensure_directory, SmDataset
 import re
 from unidecode import unidecode
 import torch
 from torch import Tensor
-import os
 
 
 def clean_bookcorpus_text(text: str) -> str:

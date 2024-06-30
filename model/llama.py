@@ -1,6 +1,6 @@
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import HyperParams, SmModel
+from model.utils import LanguageModelHyperParams, SmModel
 from torch.optim import AdamW
 
 import lightning.pytorch as pl
@@ -10,7 +10,7 @@ from transformers.models.llama.tokenization_llama import LlamaTokenizer
 
 
 class LlamaFineTuner(SmModel):
-    def __init__(self, params: HyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
         self.params = params
         self.hparams.update(vars(params))

@@ -14,7 +14,7 @@ from torchmetrics.text.perplexity import Perplexity
 from tokenizers import normalizers, Regex
 
 
-from model.utils import HyperParams, SmModel
+from model.utils import LanguageModelHyperParams, SmModel
 
 
 @dataclass
@@ -256,7 +256,7 @@ class SimpleBertForMaskedLM(SmModel):
     BERT model with a language modeling head
     """
 
-    def __init__(self, hparams: HyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(hparams, tokenizer)
 
         config = SimpleBERTConfig(

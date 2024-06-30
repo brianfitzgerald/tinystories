@@ -29,7 +29,7 @@ class ModelChoice(Enum):
 
 
 @dataclass
-class HyperParams:
+class LanguageModelHyperParams:
     base_model_checkpoint: str = "google/flan-t5-small"
     tokenizer_checkpoint: Optional[str] = "google/flan-t5-small"
     max_seq_length: int = 2048
@@ -61,6 +61,22 @@ class HyperParams:
             return self.tokenizer_checkpoint
         return self.base_model_checkpoint
 
+@dataclass
+class VitHyperParams:
+    learning_rate: float = 3e-4
+    adam_epsilon: float = 1e-8
+    warmup_steps_count: Optional[int] = None
+    warmup_ratio: Optional[float] = None
+    train_batch_size: int = 4
+    val_batch_size: int = 2
+    num_train_epochs: int = 25
+    gradient_accumulation_steps: int = 2
+    n_gpus: int = 1
+    max_grad_norm: float = 1.0
+    seed: int = 42
+    weight_decay: float = 0.0
+    optimizer: OptimizerChoice = "AdamW8bit"
+
 
 class SmDataset(pl.LightningDataModule):
     def __init__(
@@ -86,7 +102,7 @@ class SmDataset(pl.LightningDataModule):
 
 
 class SmModel(pl.LightningModule):
-    def __init__(self, hparams: HyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__()
         self.params = hparams
         self.tokenizer = tokenizer

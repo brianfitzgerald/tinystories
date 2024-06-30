@@ -19,7 +19,7 @@ print("Loading dependencies - lightning...")
 from lightning.pytorch.loggers import WandbLogger, CSVLogger
 import lightning.pytorch as pl
 from model.callbacks import (
-    LogPredictionSamplesCallback,
+    LogLLMPredictionSamplesCallback,
     HfModelCheckpoint,
     GradientNormLogger,
 )
@@ -33,7 +33,7 @@ from lightning.pytorch.callbacks import (
 print("Loading dependencies - project...")
 from dataset.parti import PromptUpsampleDataModule
 from dataset.pretrain import TinyStoriesDataset, BertPretrainDataset
-from model.utils import ModelChoice, SmDataset, HyperParams
+from model.utils import ModelChoice, SmDataset, LanguageModelHyperParams
 
 
 MODEL_CHOICES = {
@@ -49,7 +49,7 @@ class ModelConfig:
     model: type[SmModel]
     data_module: type[SmDataset]
     wandb_project_name: str
-    hyperparams: HyperParams = HyperParams()
+    hyperparams: LanguageModelHyperParams = LanguageModelHyperParams()
 
 
 PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
@@ -60,25 +60,25 @@ CONFIGS = {
         LlamaFineTuner,
         FunctionCallingDataModule,
         "llama-function-calling",
-        HyperParams("TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
+        LanguageModelHyperParams("TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
     ),
     "prompt_upsample_small": ModelConfig(
         T5FineTuner,
         PromptUpsampleDataModule,
         PROMPT_UPSAMPLING_PROJECT,
-        HyperParams(base_model_checkpoint="google/flan-t5-small"),
+        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-small"),
     ),
     "prompt_upsample": ModelConfig(
         T5FineTuner,
         PromptUpsampleDataModule,
         PROMPT_UPSAMPLING_PROJECT,
-        HyperParams(base_model_checkpoint="google/flan-t5-base"),
+        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base"),
     ),
     "simple_bert_pretrain": ModelConfig(
         SimpleBertForMaskedLM,
         BertPretrainDataset,
         "simple-bert-pretrain",
-        HyperParams(
+        LanguageModelHyperParams(
             # base model is only used for tokenizer
             base_model_checkpoint="bert-base-uncased",
             learning_rate=1e-3,
@@ -95,7 +95,7 @@ CONFIGS = {
         GPT,
         TinyStoriesDataset,
         "tinystories-gpt-pretrain",
-        HyperParams(
+        LanguageModelHyperParams(
             learning_rate=1e-4,
             warmup_ratio=0.1,
             weight_decay=0.01,
@@ -138,7 +138,7 @@ def main(wandb: bool = False, config: str = "tiny_stories"):
         loggers.append(CSVLogger("logs", name=run_name))
 
     model_choice: ModelChoice = MODEL_CHOICES[model.__class__]  # type: ignore
-    sample_callback = LogPredictionSamplesCallback(
+    sample_callback = LogLLMPredictionSamplesCallback(
         tokenizer, model_choice, wandb_logger
     )
 

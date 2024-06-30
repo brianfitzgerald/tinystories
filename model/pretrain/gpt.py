@@ -13,7 +13,7 @@ from transformers.optimization import (
     get_linear_schedule_with_warmup,
 )
 
-from model.utils import HyperParams, SmModel
+from model.utils import LanguageModelHyperParams, SmModel
 
 
 def find_multiple(n: int, k: int) -> int:
@@ -360,7 +360,7 @@ class Block(nn.Module):
 
 
 class GPT(SmModel):
-    def __init__(self, hparams: HyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(hparams, tokenizer)
 
         config = Config(

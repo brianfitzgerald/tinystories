@@ -23,7 +23,10 @@ from model.utils import (
 )
 
 
-class LogPredictionSamplesCallback(pl.Callback):
+class LogLLMPredictionSamplesCallback(pl.Callback):
+    """
+    Log prediction samples when training a language model.
+    """
     def __init__(
         self,
         tokenizer: PreTrainedTokenizer,

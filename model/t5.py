@@ -4,7 +4,7 @@ from transformers.optimization import (
     AdafactorSchedule,
 )
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import HyperParams, IGNORE_TOKEN_INDEX, SmModel
+from model.utils import LanguageModelHyperParams, IGNORE_TOKEN_INDEX, SmModel
 from torch.optim import AdamW
 from torch import Tensor
 from torchmetrics.text.perplexity import Perplexity
@@ -15,7 +15,7 @@ from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 
 
 class T5FineTuner(SmModel):
-    def __init__(self, params: HyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
 
         self.model: T5ForConditionalGeneration = (
