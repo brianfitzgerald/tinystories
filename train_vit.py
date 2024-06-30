@@ -1,50 +1,35 @@
-print("Loading dependencies - torch...")
-from fire import Fire
-from dataclasses import dataclass
-
-from lightning import seed_everything
 import random
 import string
+from dataclasses import dataclass
+from typing import Optional
 
-from model.t5 import T5FineTuner
-from model.pretrain.gpt import GPT
-from model.utils import SmModel, VitHyperParams
-
-print("Loading dependencies - lightning...")
-from lightning.pytorch.loggers import WandbLogger, CSVLogger
 import lightning.pytorch as pl
-from model.callbacks import (
-    GradientNormLogger,
-)
+from fire import Fire
+from lightning import seed_everything
 from lightning.pytorch.callbacks import (
-    ModelCheckpoint,
     LearningRateMonitor,
+    ModelCheckpoint,
     TQDMProgressBar,
 )
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
-
-print("Loading dependencies - project...")
-from model.utils import ModelChoice, SmDataset, VitHyperParams
-
-
-MODEL_CHOICES = {
-    GPT: ModelChoice.GPT,
-}
+from model.callbacks import GradientNormLogger
+from model.vit import VisionTransformer, VitHParams
+from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
 
 
 @dataclass
 class VitModelConfig:
     wandb_project_name: str
-    hyperparams: VitHyperParams = VitHyperParams()
+    data_module: type[VitDataset]
+    hyperparams: VitHParams = VitHParams()
 
-
-PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
-PROMPT_SAFETY_PROJECT = "t5-prompt-safety"
 
 CONFIGS = {
     "vit": VitModelConfig(
         "aesthetic-scorer-vit",
-        VitHyperParams(
+        AestheticScoreDataset,
+        VitHParams(
             learning_rate=1e-4,
             warmup_ratio=0.1,
             weight_decay=0.01,
@@ -63,12 +48,10 @@ def main(wandb: bool = False, config: str = "vit"):
 
     model_config = CONFIGS[config]
     hparams = model_config.hyperparams
-    data_module = model_config.data_module(
-        hparams.train_batch_size
-    )
-    model = model_config.model(hparams, tokenizer)
+    data_module = model_config.data_module()
+    model = VisionTransformer(hparams, data_module)
 
-    wandb_logger = None
+    wandb_logger: Optional[WandbLogger] = None
     run_name = "".join(random.choices(string.ascii_letters + string.digits, k=4))
     run_name = f"{config}-{run_name}"
 
@@ -94,12 +77,11 @@ def main(wandb: bool = False, config: str = "vit"):
     )
 
     progress_bar_callback = TQDMProgressBar(refresh_rate=10)
-    precision = "32" if model_config.model == T5FineTuner else "16-mixed"
 
     trainer = pl.Trainer(
         accumulate_grad_batches=hparams.gradient_accumulation_steps,
         max_epochs=hparams.num_train_epochs,
-        precision=precision,
+        precision="16-mixed",
         gradient_clip_val=hparams.max_grad_norm,
         val_check_interval=0.1,
         callbacks=[

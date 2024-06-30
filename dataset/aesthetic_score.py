@@ -2,8 +2,16 @@ from model.utils import ensure_directory, SmDataset
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 import os
+from typing import Optional
 
-class AestheticScoreDataset(pl.LightningDataModule):
+
+class VitDataset(pl.LightningDataModule):
+    image_size: int = 224
+    patch_size: int = 16
+    n_classes: int = 1000
+
+
+class AestheticScoreDataset(VitDataset):
     def __init__(
         self,
         batch_size: int,
@@ -45,9 +53,4 @@ class AestheticScoreDataset(pl.LightningDataModule):
 
     def prepare_sample(self, examples: dict):
 
-        return {
-            "input_ids": input_ids,
-            "labels": labels,
-            "attention_mask": inputs_tokenized["attention_mask"],
-        }
-
+        return {}
