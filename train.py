@@ -97,7 +97,7 @@ CONFIGS = {
         "tinystories-gpt-pretrain",
         HyperParams(
             learning_rate=1e-4,
-            warmup_ratio=0.5,
+            warmup_ratio=0.1,
             weight_decay=0.01,
             max_grad_norm=0.5,
             num_train_epochs=1,

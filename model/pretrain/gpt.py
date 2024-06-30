@@ -7,9 +7,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 import math
 from transformers.tokenization_utils import PreTrainedTokenizer
-from transformers.optimization import get_cosine_schedule_with_warmup
 from torch.optim import AdamW
 import torch.nn.functional as F
+from transformers.optimization import (
+    get_linear_schedule_with_warmup,
+)
 
 from model.utils import HyperParams, SmModel
 
@@ -543,18 +545,20 @@ class GPT(SmModel):
             eps=self.params.adam_epsilon,
             weight_decay=self.params.weight_decay,
         )
-        scheduler = get_cosine_schedule_with_warmup(
+        warmup_steps = self.params.warmup_steps(self.trainer.estimated_stepping_batches)
+        train_steps = self.trainer.num_training_batches
+        print(f"Training steps: {train_steps} warmup steps: {warmup_steps}")
+        scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.params.warmup_steps(
-                self.trainer.estimated_stepping_batches
-            ),
-            num_training_steps=int(self.trainer.estimated_stepping_batches),
+            num_warmup_steps=warmup_steps,
+            num_training_steps=train_steps,
         )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
+                "interval": "step",
             },
         }
 
