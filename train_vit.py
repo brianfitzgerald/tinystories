@@ -22,7 +22,7 @@ from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
 class VitModelConfig:
     wandb_project_name: str
     data_module: type[VitDataset]
-    hyperparams: VitHParams = VitHParams()
+    hyperparams: VitHParams
 
 
 CONFIGS = {
@@ -48,7 +48,7 @@ def main(wandb: bool = False, config: str = "vit"):
 
     model_config = CONFIGS[config]
     hparams = model_config.hyperparams
-    data_module = model_config.data_module()
+    data_module = model_config.data_module(model_config.hyperparams.train_batch_size)
     model = VisionTransformer(hparams, data_module)
 
     wandb_logger: Optional[WandbLogger] = None

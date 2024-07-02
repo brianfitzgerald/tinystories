@@ -1,11 +1,13 @@
-import torch
-from torch import nn, Tensor
-from typing import Optional, Literal
 from dataclasses import dataclass
-import lightning.pytorch as pl
+from typing import Dict, Literal, Optional
 
+import lightning.pytorch as pl
+import torch
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
+from torch import Tensor, nn
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from dataset.aesthetic_score import VitDataset
 
@@ -227,3 +229,45 @@ class VisionTransformer(pl.LightningModule):
             params.dropout,
             params.emb_dropout,
         )
+
+        self.params = params
+
+        self.loss_fn = nn.CrossEntropyLoss()
+
+    def _step(self, batch: Dict):
+        # b c w h
+        print(batch.keys())
+        image = batch["image"]
+        pred = self.model(image)
+        score = batch["label"]
+        loss = self.loss_fn(pred, score)
+
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        loss = self._step(batch)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss}
+
+    def validation_step(self, batch, batch_idx):
+        loss = self._step(batch)
+        self.log(
+            "val_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss}
+
+    def configure_optimizers(self):
+        optimizer = AdamW(
+            self.model.parameters(),
+            lr=self.params.learning_rate,
+            eps=self.params.adam_epsilon,
+        )
+        scheduler = CosineAnnealingLR(optimizer, self.params.num_train_epochs)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+            },
+        }

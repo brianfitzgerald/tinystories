@@ -21,3 +21,4 @@ matplotlib
 openai
 unidecode
 anthropic
+pillow==10.4.0
