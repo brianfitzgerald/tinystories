@@ -3,6 +3,7 @@ import string
 from dataclasses import dataclass
 from typing import Optional
 
+import torch.multiprocessing
 import lightning.pytorch as pl
 from fire import Fire
 from lightning import seed_everything
@@ -16,7 +17,6 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from model.callbacks import GradientNormLogger
 from model.vit import VisionTransformer, VitHParams
 from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
-
 
 @dataclass
 class VitModelConfig:
@@ -35,7 +35,7 @@ CONFIGS = {
             weight_decay=0.01,
             max_grad_norm=0.5,
             num_train_epochs=1,
-            train_batch_size=32,
+            train_batch_size=4,
             val_batch_size=1,
             gradient_accumulation_steps=16,
         ),
@@ -83,7 +83,6 @@ def main(wandb: bool = False, config: str = "vit"):
         max_epochs=hparams.num_train_epochs,
         precision="16-mixed",
         gradient_clip_val=hparams.max_grad_norm,
-        val_check_interval=0.1,
         callbacks=[
             checkpoint_callback,
             progress_bar_callback,
