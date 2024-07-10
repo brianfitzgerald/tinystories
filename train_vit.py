@@ -3,7 +3,6 @@ import string
 from dataclasses import dataclass
 from typing import Optional
 
-import torch.multiprocessing
 import lightning.pytorch as pl
 from fire import Fire
 from lightning import seed_everything
@@ -13,6 +12,7 @@ from lightning.pytorch.callbacks import (
     TQDMProgressBar,
 )
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
+from loguru import logger
 
 from model.callbacks import GradientNormLogger
 from model.vit import VisionTransformer, VitHParams
@@ -54,6 +54,7 @@ def main(wandb: bool = False, config: str = "vit"):
     wandb_logger: Optional[WandbLogger] = None
     run_name = "".join(random.choices(string.ascii_letters + string.digits, k=4))
     run_name = f"{config}-{run_name}"
+    logger.info(f"Starting run {run_name}")
 
     if wandb:
         wandb_logger = WandbLogger(

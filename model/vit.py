@@ -8,7 +8,6 @@ from einops.layers.torch import Rearrange
 from torch import Tensor, nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torchvision.transforms import transforms
 
 from dataset.aesthetic_score import VitDataset
 
@@ -234,12 +233,13 @@ class VisionTransformer(pl.LightningModule):
         self.params = params
 
         self.loss_fn = nn.CrossEntropyLoss()
-        
+        self.image_size = dataset.image_size
+
     def _step(self, batch: Dict):
-        # b c w h
+
         image = batch["image"]
         pred = self.model(image)
-        score = batch["overall_rating"]
+        score = batch["label"]
         loss = self.loss_fn(pred, score)
 
         return loss
