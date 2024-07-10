@@ -7,7 +7,7 @@ from datasets import load_dataset, DatasetDict
 from torchvision.transforms import transforms
 from loguru import logger
 from PIL import Image
-from torchvision.transforms.functional import resize, center_crop
+from torchvision.transforms.functional import resize, center_crop, to_tensor
 import torch
 
 
@@ -45,8 +45,6 @@ class AestheticScoreDataset(VitDataset):
                 transforms.Resize((self.image_size, self.image_size)),
             ]
         )
-        self.train_dataset.set_format(type="torch", columns=self.COLUMNS + ["image"])
-        self.val_dataset.set_format(type="torch", columns=self.COLUMNS + ["image"])
 
     def train_dataloader(self):
         return DataLoader(
@@ -56,7 +54,7 @@ class AestheticScoreDataset(VitDataset):
         )
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=8, collate_fn=self.collate_fn)  # type: ignore
+        return DataLoader(self.val_dataset, batch_size=8,  collate_fn=self.collate_fn)  # type: ignore
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
@@ -88,7 +86,7 @@ class AestheticScoreDataset(VitDataset):
         image_tensors = []
         labels = []
         for sample in batch:
-            image = sample["image"]
+            image = to_tensor(sample["image"])
             image = resize(image, [self.image_size])
             image = center_crop(image, [self.image_size, self.image_size])
             image = image.to(dtype=torch.float32)
