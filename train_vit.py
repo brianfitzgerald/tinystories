@@ -14,9 +14,10 @@ from lightning.pytorch.callbacks import (
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from loguru import logger
 
+from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
 from model.callbacks import GradientNormLogger
 from model.vit import VisionTransformer, VitHParams
-from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
+
 
 @dataclass
 class VitModelConfig:
