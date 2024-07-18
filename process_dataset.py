@@ -17,13 +17,13 @@ COLUMNS = [
 
 def main():
 
-    out_wds = wds.ShardWriter("/weka/home-brianf/imagereward_cache/shard-%06d.tar")
+    out_wds = wds.ShardWriter("/weka/home-brianf/imagereward_cache/shard-%06d.tar", maxcount=1000)
 
     # ImageReward
 
     dataset = cast(
         DatasetDict,
-        load_dataset("THUDM/ImageRewardDB", "2k", verification_mode="no_checks"),
+        load_dataset("THUDM/ImageRewardDB", "4k", verification_mode="no_checks"),
     )
     ds_iter = iter(dataset["train"])
     iter_tqdm = tqdm(total=len(dataset["train"]))
@@ -32,6 +32,7 @@ def main():
         try:
             sample: Dict = next(ds_iter)  # type: ignore
         except StopIteration:
+            print("End of dataset")
             break
         except Exception as e:
             print(e)

@@ -1,4 +1,5 @@
-print("Loading dependencies - torch...")
+from loguru import logger
+logger.info("Loading dependencies - torch...")
 from fire import Fire
 from dataclasses import dataclass
 
@@ -15,7 +16,7 @@ from model.pretrain.bert import SimpleBertForMaskedLM, get_sane_normalizers
 from model.pretrain.gpt import GPT
 from model.utils import SmModel
 
-print("Loading dependencies - lightning...")
+logger.info("Loading dependencies - lightning...")
 from lightning.pytorch.loggers import WandbLogger, CSVLogger
 import lightning.pytorch as pl
 from model.callbacks import (
@@ -30,9 +31,10 @@ from lightning.pytorch.callbacks import (
 )
 
 
-print("Loading dependencies - project...")
+logger.info("Loading dependencies - project...")
 from dataset.parti import PromptUpsampleDataModule
 from dataset.pretrain import TinyStoriesDataset, BertPretrainDataset
+from dataset.info_extract import SquadExtractiveQADataModule
 from model.utils import ModelChoice, SmDataset, LanguageModelHyperParams
 
 
@@ -54,6 +56,7 @@ class ModelConfig:
 
 PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
 PROMPT_SAFETY_PROJECT = "t5-prompt-safety"
+EXTRACTIVE_QA_PROJECT = "t5-prompt-upsampling"
 
 CONFIGS = {
     "fn_calling": ModelConfig(
@@ -108,10 +111,16 @@ CONFIGS = {
             tokenizer_checkpoint="EleutherAI/gpt-neox-20b",
         ),
     ),
+    "info_extraction": ModelConfig(
+        T5FineTuner,
+        SquadExtractiveQADataModule,
+        EXTRACTIVE_QA_PROJECT,
+        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base"),
+    ),
 }
 
 
-def main(wandb: bool = False, config: str = "tiny_stories"):
+def main(wandb: bool = False, config: str = "info_extraction"):
     loggers = []
 
     model_config = CONFIGS[config]

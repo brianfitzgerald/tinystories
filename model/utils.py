@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Dict
 from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics.text.bleu import BLEUScore
 from pathlib import Path
@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 import os
 from dataclasses import dataclass
 from enum import Enum
+from loguru import logger
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -62,6 +63,19 @@ class LanguageModelHyperParams:
         return self.base_model_checkpoint
 
 
+def filter_row(row: Dict) -> bool:
+    prompt, upsampled = row["Prompt"], row["Upsampled"]
+    if len(prompt) == 0 or len(upsampled) == 0:
+        return False
+    if "\n" in prompt or "\n" in upsampled:
+        return False
+    if len(upsampled.split(" ")) > 10:
+        return False
+    if len(upsampled) > 128:
+        return False
+    return True
+
+
 class SmDataset(pl.LightningDataModule):
     def __init__(
         self,
@@ -77,6 +91,82 @@ class SmDataset(pl.LightningDataModule):
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
         self.cpu_count = max(len(os.sched_getaffinity(0)), 32)
+        self.cache_dir = "dataset_caches/default"
+        self.input_column, self.target_column = "context", "fields"
+
+    def setup(self, stage: Optional[str] = None):
+        logger.info(f"Loading dataset for stage {stage}")
+
+        # Load dataset and split
+        # dataset = load_dataset("parquet", data_files={"train": "parti_prompts.parquet"})["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
+        self.train_dataset = dataset["train"]
+        self.val_dataset = dataset["test"]
+
+        ensure_directory(self.cache_dir, clear=False)
+
+        self.train_dataset = self.train_dataset.filter(
+            filter_row,
+            cache_file_name=f"{self.cache_dir}/training_filtered.parquet",
+            num_proc=self.cpu_count,
+        )
+        self.val_dataset = self.val_dataset.filter(
+            filter_row,
+            cache_file_name=f"{self.cache_dir}/validation_filtered.parquet",
+            num_proc=self.cpu_count,
+        )
+
+        self.train_dataset = self.train_dataset.map(
+            self.prepare_sample,
+            batched=True,
+            load_from_cache_file=True,
+            cache_file_name=f"{self.cache_dir}/training.parquet",
+            num_proc=self.cpu_count,
+        )
+
+        self.val_dataset = self.val_dataset.map(
+            self.prepare_sample,
+            batched=True,
+            load_from_cache_file=True,
+            cache_file_name=f"{self.cache_dir}/validation.parquet",
+            num_proc=self.cpu_count,
+        )
+
+        columns = [
+            "input_ids",
+            "attention_mask",
+            "decoder_attention_mask",
+            "labels",
+        ]
+
+        # Set format for PyTorch
+        self.train_dataset.set_format(type="torch", columns=columns)
+        self.val_dataset.set_format(type="torch", columns=columns)
+
+    def prepare_sample(self, examples: dict):
+
+        inputs_tokenized = self.tokenizer(
+            examples[self.input_column],
+            max_length=self.max_token_length,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt",
+        )
+
+        labels_tokenized = self.tokenizer(
+            text_target=examples[self.target_column],
+            max_length=self.max_token_length,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt",
+        )
+
+        return {
+            "input_ids": inputs_tokenized["input_ids"],
+            "attention_mask": inputs_tokenized["attention_mask"],
+            "decoder_attention_mask": labels_tokenized["attention_mask"],
+            "labels": labels_tokenized["input_ids"],
+        }
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.cpu_count)  # type: ignore
@@ -86,7 +176,9 @@ class SmDataset(pl.LightningDataModule):
 
 
 class SmModel(pl.LightningModule):
-    def __init__(self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(
+        self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
+    ) -> None:
         super().__init__()
         self.params = hparams
         self.tokenizer = tokenizer

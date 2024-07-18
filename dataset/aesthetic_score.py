@@ -64,13 +64,13 @@ class AestheticScoreDataset(VitDataset):
                 transforms.Resize((self.image_size, self.image_size)),
             ]
         )
-        self.wds_loader = wds.WebDataset(
-            get_wds_file_list("/weka/home-brianf/imagereward_cache"),
-        )
+        shard_list = get_wds_file_list("/weka/home-brianf/imagereward_cache")
+        self.train_wds_loader = wds.WebDataset(shard_list[:-1])
+        self.val_wds_loader = wds.WebDataset(shard_list[-1])
 
     def train_dataloader(self):
         return DataLoader(
-            self.wds_loader,
+            self.train_wds_loader,
             batch_size=self.batch_size,
             num_workers=self.proc_count,
             collate_fn=self.collate_fn,
@@ -78,7 +78,7 @@ class AestheticScoreDataset(VitDataset):
 
     def val_dataloader(self):
         # TODO fix train test split
-        return DataLoader(self.wds_loader, num_workers=self.proc_count, batch_size=8, collate_fn=self.collate_fn)  # type: ignore
+        return DataLoader(self.val_wds_loader, num_workers=self.proc_count, batch_size=8, collate_fn=self.collate_fn)  # type: ignore
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")

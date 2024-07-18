@@ -35,7 +35,7 @@ CONFIGS = {
             warmup_ratio=0.1,
             weight_decay=0.01,
             max_grad_norm=0.5,
-            num_train_epochs=1,
+            num_train_epochs=10,
             train_batch_size=32,
             val_batch_size=16,
             gradient_accumulation_steps=16,
@@ -78,7 +78,7 @@ def main(wandb: bool = False, config: str = "vit"):
         mode="min",
     )
 
-    progress_bar_callback = TQDMProgressBar(refresh_rate=10)
+    progress_bar_callback = TQDMProgressBar(refresh_rate=1)
 
     trainer = pl.Trainer(
         accumulate_grad_batches=hparams.gradient_accumulation_steps,
