@@ -20,7 +20,7 @@ class T5FineTuner(SmModel):
 
         self.model: T5ForConditionalGeneration = (
             T5ForConditionalGeneration.from_pretrained(params.base_model_checkpoint)
-        )
+        ) # type: ignore
         self.train_steps = 0
         self.save_hyperparameters()
         self.perplexity = Perplexity(ignore_index=self.tokenizer.pad_token_id)

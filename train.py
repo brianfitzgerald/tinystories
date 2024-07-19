@@ -115,7 +115,7 @@ CONFIGS = {
         T5FineTuner,
         SquadExtractiveQADataModule,
         EXTRACTIVE_QA_PROJECT,
-        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base"),
+        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base", warmup_ratio=0.2),
     ),
 }
 

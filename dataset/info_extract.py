@@ -1,4 +1,7 @@
 from typing import Tuple
+from datasets.formatting.formatting import LazyBatch
+import json
+from unidecode import unidecode
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -6,16 +9,15 @@ from model.utils import (
     SmDataset,
 )
 
-TASK_PREFIX = "Extract the following information from the given context using the provided schema:"
-
-def get_schema_from_result(d: dict):
-    return {key: type(value).__name__ for key, value in d.items()}
-
 
 def format_prompt(sample: dict) -> Tuple[str, str]:
-    json_schema = get_schema_from_result(sample["json_schema"])
-    input_out = f"{TASK_PREFIX}\t{sample["context"]}\n{sample["fields"]}"
-    labels_out = f"{json_schema}"
+    sample["json_schema"] = unidecode(sample["json_schema"])
+    sample["context"] = unidecode(sample["context"])
+
+    schema: dict = json.loads(sample['json_schema'])
+    json_schema = {key: type(value).__name__ for key, value in schema.items()}
+    input_out = f"Extract the following information using the provided schema: \t{json.dumps(json_schema)}\tand the following context: \t{sample["context"]}\n"
+    labels_out = json.dumps(schema)
 
     return input_out, labels_out
 
@@ -29,16 +31,17 @@ class SquadExtractiveQADataModule(SmDataset):
         super().__init__(batch_size, tokenizer, max_token_length)
 
         # Dataset specific parameters
-        self.task_prefix = TASK_PREFIX
         self.cache_dir = "dataset_caches/parti"
         self.dataset_name = "roborovski/squad-extractive-qa"
         self.input_column, self.target_column = "context", "fields"
 
-    def prepare_sample(self, examples: dict):
-        breakpoint()
-        formatted = [format_prompt(sample) for sample in examples]
-        inputs = [x[0] for x in formatted]
-        labels = [x[1] for x in formatted]
+    def prepare_sample(self, samples: LazyBatch):
+        inputs, labels = [], []
+        for i in range(len(samples['id'])): # type: ignore
+            sample = {k: v[i] for k, v in samples.items()}
+            sample_input, sample_labels = format_prompt(sample)
+            inputs.append(sample_input)
+            labels.append(sample_labels)
 
         inputs_tokenized = self.tokenizer(
             inputs,
