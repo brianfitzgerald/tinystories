@@ -1,3 +1,4 @@
+from typing import Tuple
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -5,7 +6,18 @@ from model.utils import (
     SmDataset,
 )
 
-TASK_PREFIX = "Below is a schema for information to extract from a document. Write a response that extracts the information from the document, following the provided schema:"
+TASK_PREFIX = "Extract the following information from the given context using the provided schema:"
+
+def get_schema_from_result(d: dict):
+    return {key: type(value).__name__ for key, value in d.items()}
+
+
+def format_prompt(sample: dict) -> Tuple[str, str]:
+    json_schema = get_schema_from_result(sample["json_schema"])
+    input_out = f"{TASK_PREFIX}\t{sample["context"]}\n{sample["fields"]}"
+    labels_out = f"{json_schema}"
+
+    return input_out, labels_out
 
 class SquadExtractiveQADataModule(SmDataset):
     def __init__(
@@ -23,7 +35,10 @@ class SquadExtractiveQADataModule(SmDataset):
         self.input_column, self.target_column = "context", "fields"
 
     def prepare_sample(self, examples: dict):
-        inputs = [self.task_prefix + doc for doc in examples[self.input_column]]
+        breakpoint()
+        formatted = [format_prompt(sample) for sample in examples]
+        inputs = [x[0] for x in formatted]
+        labels = [x[1] for x in formatted]
 
         inputs_tokenized = self.tokenizer(
             inputs,
@@ -34,7 +49,7 @@ class SquadExtractiveQADataModule(SmDataset):
         )
 
         labels_tokenized = self.tokenizer(
-            text_target=examples[self.target_column],
+            labels,
             max_length=self.max_token_length,
             truncation=True,
             padding="max_length",

@@ -1,5 +1,5 @@
 from loguru import logger
-logger.info("Loading dependencies - torch...")
+logger.info("Loading dependencies - Torch...")
 from fire import Fire
 from dataclasses import dataclass
 
@@ -51,7 +51,7 @@ class ModelConfig:
     model: type[SmModel]
     data_module: type[SmDataset]
     wandb_project_name: str
-    hyperparams: LanguageModelHyperParams = LanguageModelHyperParams()
+    hyperparams: LanguageModelHyperParams
 
 
 PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"

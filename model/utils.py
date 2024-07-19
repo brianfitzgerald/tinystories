@@ -9,6 +9,8 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from loguru import logger
+from datasets import load_dataset
+from functools import partial
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -63,18 +65,6 @@ class LanguageModelHyperParams:
         return self.base_model_checkpoint
 
 
-def filter_row(row: Dict) -> bool:
-    prompt, upsampled = row["Prompt"], row["Upsampled"]
-    if len(prompt) == 0 or len(upsampled) == 0:
-        return False
-    if "\n" in prompt or "\n" in upsampled:
-        return False
-    if len(upsampled.split(" ")) > 10:
-        return False
-    if len(upsampled) > 128:
-        return False
-    return True
-
 
 class SmDataset(pl.LightningDataModule):
     def __init__(
@@ -91,8 +81,10 @@ class SmDataset(pl.LightningDataModule):
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
         self.cpu_count = max(len(os.sched_getaffinity(0)), 32)
+        self.cpu_count = 1
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
+        self.dataset_name = "roborovski/squad-extractive-qa"
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
@@ -104,17 +96,6 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = dataset["test"]
 
         ensure_directory(self.cache_dir, clear=False)
-
-        self.train_dataset = self.train_dataset.filter(
-            filter_row,
-            cache_file_name=f"{self.cache_dir}/training_filtered.parquet",
-            num_proc=self.cpu_count,
-        )
-        self.val_dataset = self.val_dataset.filter(
-            filter_row,
-            cache_file_name=f"{self.cache_dir}/validation_filtered.parquet",
-            num_proc=self.cpu_count,
-        )
 
         self.train_dataset = self.train_dataset.map(
             self.prepare_sample,

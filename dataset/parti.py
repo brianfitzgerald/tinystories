@@ -1,6 +1,5 @@
 from datasets import load_dataset
-from typing import Optional
-from typing import Dict
+from typing import Optional, Dict, List
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -22,6 +21,18 @@ def generate_full_prompt(instruction: str, prompt: str) -> str:
         "Write a response that appropriately completes the request.\n\n"
         f"### Instruction:\n{instruction}\n\n### Input:\n{prompt}\n\n### Response:"
     )
+
+def filter_rows(row: Dict, cols: List[str]) -> bool:
+    prompt, upsampled = row["Prompt"], row["Upsampled"]
+    if len(prompt) == 0 or len(upsampled) == 0:
+        return False
+    if "\n" in prompt or "\n" in upsampled:
+        return False
+    if len(upsampled.split(" ")) > 10:
+        return False
+    if len(upsampled) > 128:
+        return False
+    return True
 
 
 class PromptUpsampleDataModule(SmDataset):
