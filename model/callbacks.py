@@ -27,6 +27,7 @@ class LogLLMPredictionSamplesCallback(pl.Callback):
     """
     Log prediction samples when training a language model.
     """
+
     def __init__(
         self,
         tokenizer: PreTrainedTokenizer,
@@ -129,9 +130,11 @@ class LogLLMPredictionSamplesCallback(pl.Callback):
 
             for feature in [input_ids, out, labels]:
                 decoded = self.tokenizer.batch_decode(
-                    feature, clean_up_tokenization_spaces=True
+                    feature, clean_up_tokenization_spaces=True, skip_special_tokens=True
                 )
-                decoded = [s.replace("[PAD]", "").strip() for s in decoded]
+                decoded = [
+                    s.replace("[PAD]", "").replace("<pad>", "").strip() for s in decoded
+                ]
                 table_columns.append(decoded)
 
         run_name = "latest"

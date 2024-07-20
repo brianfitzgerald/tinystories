@@ -1,3 +1,4 @@
+from loguru import logger
 from transformers.optimization import (
     Adafactor,
     get_inverse_sqrt_schedule,
@@ -18,6 +19,7 @@ class T5FineTuner(SmModel):
     def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
 
+        logger.info("Loading T5 model")
         self.model: T5ForConditionalGeneration = (
             T5ForConditionalGeneration.from_pretrained(params.base_model_checkpoint)
         ) # type: ignore
@@ -59,6 +61,7 @@ class T5FineTuner(SmModel):
             on_step=True,
             on_epoch=True,
             logger=True,
+            prog_bar=False
         )
         self.log(
             "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
@@ -73,6 +76,7 @@ class T5FineTuner(SmModel):
             on_step=True,
             on_epoch=True,
             logger=True,
+            prog_bar=False
         )
         self.log(
             "val_loss",

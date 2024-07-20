@@ -73,7 +73,7 @@ class PromptUpsampleDataModule(SmDataset):
         )
 
         self.train_dataset = self.train_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             cache_file_name=f"{self.cache_dir}/training.parquet",
@@ -81,7 +81,7 @@ class PromptUpsampleDataModule(SmDataset):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
@@ -99,7 +99,7 @@ class PromptUpsampleDataModule(SmDataset):
         self.train_dataset.set_format(type="torch", columns=columns)
         self.val_dataset.set_format(type="torch", columns=columns)
 
-    def prepare_sample(self, examples: dict):
+    def process_samples_batch(self, examples: dict):
         inputs = [self.task_prefix + doc for doc in examples[self.input_column]]
 
         inputs_tokenized = self.tokenizer(

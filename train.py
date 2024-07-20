@@ -1,42 +1,40 @@
 from loguru import logger
+
 logger.info("Loading dependencies - Torch...")
-from fire import Fire
+import random
+import string
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+from fire import Fire
 from lightning import seed_everything
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.tokenization_utils import PreTrainedTokenizer
-from dataset.function_calling import FunctionCallingDataModule
-import random
-import string
 
-from model.t5 import T5FineTuner
+logger.info("Loading dependencies - Lightning...")
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import (
+    LearningRateMonitor,
+    ModelCheckpoint,
+    TQDMProgressBar,
+)
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
+
+logger.info("Loading dependencies - Project...")
+from dataset.function_calling import FunctionCallingDataModule
+from dataset.squad import SquadExtractiveQADataModule, SquadDataModule
+from dataset.parti import PromptUpsampleDataModule
+from dataset.pretrain import BertPretrainDataset, TinyStoriesDataset
+from model.callbacks import (
+    GradientNormLogger,
+    HfModelCheckpoint,
+    LogLLMPredictionSamplesCallback,
+)
 from model.llama import LlamaFineTuner
 from model.pretrain.bert import SimpleBertForMaskedLM, get_sane_normalizers
 from model.pretrain.gpt import GPT
-from model.utils import SmModel
-
-logger.info("Loading dependencies - lightning...")
-from lightning.pytorch.loggers import WandbLogger, CSVLogger
-import lightning.pytorch as pl
-from model.callbacks import (
-    LogLLMPredictionSamplesCallback,
-    HfModelCheckpoint,
-    GradientNormLogger,
-)
-from lightning.pytorch.callbacks import (
-    ModelCheckpoint,
-    LearningRateMonitor,
-    TQDMProgressBar,
-)
-
-
-logger.info("Loading dependencies - project...")
-from dataset.parti import PromptUpsampleDataModule
-from dataset.pretrain import TinyStoriesDataset, BertPretrainDataset
-from dataset.info_extract import SquadExtractiveQADataModule
-from model.utils import ModelChoice, SmDataset, LanguageModelHyperParams
-
+from model.t5 import T5FineTuner
+from model.utils import LanguageModelHyperParams, ModelChoice, SmDataset, SmModel
 
 MODEL_CHOICES = {
     SimpleBertForMaskedLM: ModelChoice.SIMPLE_BERT,
@@ -56,7 +54,8 @@ class ModelConfig:
 
 PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
 PROMPT_SAFETY_PROJECT = "t5-prompt-safety"
-EXTRACTIVE_QA_PROJECT = "t5-prompt-upsampling"
+EXTRACTIVE_QA_PROJECT = "t5-extractive-qa"
+SQUAD_QA_PROJECT = "t5-squad-qa"
 
 CONFIGS = {
     "fn_calling": ModelConfig(
@@ -115,12 +114,34 @@ CONFIGS = {
         T5FineTuner,
         SquadExtractiveQADataModule,
         EXTRACTIVE_QA_PROJECT,
-        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base", warmup_ratio=0.2),
+        LanguageModelHyperParams(
+            base_model_checkpoint="google/flan-t5-base",
+            warmup_ratio=0.2,
+            optimizer="Adafactor",
+        ),
+    ),
+    "squad_t5": ModelConfig(
+        T5FineTuner,
+        SquadDataModule,
+        SQUAD_QA_PROJECT,
+        LanguageModelHyperParams(
+            base_model_checkpoint="google/flan-t5-base",
+            learning_rate=0.001,
+            warmup_ratio=0.2,
+            optimizer="Adafactor",
+            train_batch_size=8,
+            val_batch_size=16,
+            gradient_accumulation_steps=16,
+            num_train_epochs=100,
+        ),
     ),
 }
 
 
-def main(wandb: bool = False, config: str = "info_extraction"):
+def main(wandb: bool = False, config: str = "squad_t5"):
+
+    load_dotenv(".env")
+
     loggers = []
 
     model_config = CONFIGS[config]
@@ -181,7 +202,7 @@ def main(wandb: bool = False, config: str = "info_extraction"):
             mode="min",
         )
 
-    progress_bar_callback = TQDMProgressBar(refresh_rate=10)
+    progress_bar_callback = TQDMProgressBar(refresh_rate=1)
     precision = "32" if model_config.model == T5FineTuner else "16-mixed"
 
     trainer = pl.Trainer(

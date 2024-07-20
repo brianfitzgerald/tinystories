@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from enum import Enum
 from loguru import logger
 from datasets import load_dataset
-from functools import partial
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -65,7 +64,6 @@ class LanguageModelHyperParams:
         return self.base_model_checkpoint
 
 
-
 class SmDataset(pl.LightningDataModule):
     def __init__(
         self,
@@ -80,8 +78,8 @@ class SmDataset(pl.LightningDataModule):
         self.batch_size = batch_size
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
-        self.cpu_count = max(len(os.sched_getaffinity(0)), 32)
-        self.cpu_count = 1
+        self.cpu_count = min(len(os.sched_getaffinity(0)), 32)
+        # self.cpu_count = 1
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
         self.dataset_name = "roborovski/squad-extractive-qa"
@@ -90,15 +88,15 @@ class SmDataset(pl.LightningDataModule):
         logger.info(f"Loading dataset for stage {stage}")
 
         # Load dataset and split
-        # dataset = load_dataset("parquet", data_files={"train": "parti_prompts.parquet"})["train"].train_test_split(test_size=0.01)  # type: ignore
         dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
         ensure_directory(self.cache_dir, clear=False)
+        logger.info(f"Processing dataset for stage {stage}, workers: {self.cpu_count}")
 
         self.train_dataset = self.train_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             cache_file_name=f"{self.cache_dir}/training.parquet",
@@ -106,7 +104,7 @@ class SmDataset(pl.LightningDataModule):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
@@ -124,10 +122,12 @@ class SmDataset(pl.LightningDataModule):
         self.train_dataset.set_format(type="torch", columns=columns)
         self.val_dataset.set_format(type="torch", columns=columns)
 
-    def prepare_sample(self, examples: dict):
+    def process_samples_batch(self, examples: dict):
+        return self._tokenize(examples[self.input_column], examples[self.target_column])
 
+    def _tokenize(self, inputs: List[str], labels: List[str]) -> dict:
         inputs_tokenized = self.tokenizer(
-            examples[self.input_column],
+            inputs,
             max_length=self.max_token_length,
             truncation=True,
             padding="max_length",
@@ -135,7 +135,7 @@ class SmDataset(pl.LightningDataModule):
         )
 
         labels_tokenized = self.tokenizer(
-            text_target=examples[self.target_column],
+            labels,
             max_length=self.max_token_length,
             truncation=True,
             padding="max_length",

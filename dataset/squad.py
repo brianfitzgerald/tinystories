@@ -5,9 +5,7 @@ from unidecode import unidecode
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
-from model.utils import (
-    SmDataset,
-)
+from model.utils import SmDataset
 
 
 def format_prompt(sample: dict) -> Tuple[str, str]:
@@ -30,38 +28,50 @@ class SquadExtractiveQADataModule(SmDataset):
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
-        # Dataset specific parameters
         self.cache_dir = "dataset_caches/parti"
         self.dataset_name = "roborovski/squad-extractive-qa"
-        self.input_column, self.target_column = "context", "fields"
 
-    def prepare_sample(self, samples: LazyBatch):
+    def process_samples_batch(self, samples: LazyBatch):
         inputs, labels = [], []
         for i in range(len(samples['id'])): # type: ignore
             sample = {k: v[i] for k, v in samples.items()}
             sample_input, sample_labels = format_prompt(sample)
             inputs.append(sample_input)
             labels.append(sample_labels)
+        
+        return self._tokenize(inputs, labels)
 
-        inputs_tokenized = self.tokenizer(
-            inputs,
-            max_length=self.max_token_length,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
 
-        labels_tokenized = self.tokenizer(
-            labels,
-            max_length=self.max_token_length,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
+def format_squad(sample: dict) -> Tuple[str, str]:
+    for k in ["context", "question", "answers"]:
+        sample[k] = unidecode(sample[k])
+    
+    input_out = f"Question: {sample['question']}\nContext: {sample['context']}\n"
+    answers = sample["answers"]["text"] 
+    label_out = answers[0] if answers else "Cannot answer this question"
 
-        return {
-            "input_ids": inputs_tokenized["input_ids"],
-            "attention_mask": inputs_tokenized["attention_mask"],
-            "decoder_attention_mask": labels_tokenized["attention_mask"],
-            "labels": labels_tokenized["input_ids"],
-        }
+    return input_out, label_out
+
+
+class SquadDataModule(SmDataset):
+
+    def __init__(
+        self,
+        batch_size: int,
+        tokenizer: PreTrainedTokenizer,
+        max_token_length: int,
+    ):
+        super().__init__(batch_size, tokenizer, max_token_length)
+
+        self.cache_dir = "dataset_caches/squad"
+        self.dataset_name = "rajpurkar/squad_v2"
+
+    def process_samples_batch(self, samples: LazyBatch):
+        inputs, labels = [], []
+        for i in range(len(samples['id'])): # type: ignore
+            sample = {k: v[i] for k, v in samples.items()}
+            sample_input, sample_labels = format_squad(sample)
+            inputs.append(sample_input)
+            labels.append(sample_labels)
+        
+        return self._tokenize(inputs, labels)

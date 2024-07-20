@@ -65,7 +65,7 @@ class BertPretrainDataset(SmDataset):
         assert self.val_dataset is not None
 
         self.train_dataset = self.train_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=self.cpu_count,
@@ -73,7 +73,7 @@ class BertPretrainDataset(SmDataset):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=self.cpu_count,
@@ -111,7 +111,7 @@ class BertPretrainDataset(SmDataset):
         # The rest of the time (10% of the time) we keep the masked input tokens unchanged
         return inputs, labels
 
-    def prepare_sample(self, examples: dict):
+    def process_samples_batch(self, examples: dict):
         input_ids = [clean_bookcorpus_text(doc) for doc in examples["text"]]
 
         inputs_tokenized = self.tokenizer(
@@ -178,7 +178,7 @@ class TinyStoriesDataset(SmDataset):
         assert self.val_dataset is not None
 
         self.train_dataset = self.train_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=self.cpu_count,
@@ -186,14 +186,14 @@ class TinyStoriesDataset(SmDataset):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=self.cpu_count,
             cache_file_name=f"{cache_dir}/validation.parquet",
         )
 
-    def prepare_sample(self, examples: dict):
+    def process_samples_batch(self, examples: dict):
         input_text = [clean_bookcorpus_text(doc) for doc in examples["text"]]
 
         inputs_tokenized = self.tokenizer(

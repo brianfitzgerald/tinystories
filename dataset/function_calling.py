@@ -38,7 +38,7 @@ class FunctionCallingDataModule(SmDataset):
         self.val_dataset.set_format(type="torch")
 
         self.train_dataset = self.train_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=cpu_count,
@@ -46,14 +46,14 @@ class FunctionCallingDataModule(SmDataset):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.prepare_sample,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=True,
             num_proc=cpu_count,
             cache_file_name=f"{cache_dir}/validation.parquet",
         )
 
-    def prepare_sample(self, examples: dict):
+    def process_samples_batch(self, examples: dict):
         """
         Parse chatml string to conversation steps, convert to prompt and output, and then tokenize
         Tokenizing is split from applying the chat template so we can output the attention mask
