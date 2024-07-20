@@ -8,7 +8,7 @@ from transformers.tokenization_utils import PreTrainedTokenizer
 from model.utils import SmDataset
 
 
-def format_prompt(sample: dict) -> Tuple[str, str]:
+def format_squad_extractive(sample: dict) -> Tuple[str, str]:
     sample["json_schema"] = unidecode(sample["json_schema"])
     sample["context"] = unidecode(sample["context"])
 
@@ -35,7 +35,7 @@ class SquadExtractiveQADataModule(SmDataset):
         inputs, labels = [], []
         for i in range(len(samples['id'])): # type: ignore
             sample = {k: v[i] for k, v in samples.items()}
-            sample_input, sample_labels = format_prompt(sample)
+            sample_input, sample_labels = format_squad_extractive(sample)
             inputs.append(sample_input)
             labels.append(sample_labels)
         
@@ -43,9 +43,7 @@ class SquadExtractiveQADataModule(SmDataset):
 
 
 def format_squad(sample: dict) -> Tuple[str, str]:
-    for k in ["context", "question", "answers"]:
-        sample[k] = unidecode(sample[k])
-    
+
     input_out = f"Question: {sample['question']}\nContext: {sample['context']}\n"
     answers = sample["answers"]["text"] 
     label_out = answers[0] if answers else "Cannot answer this question"

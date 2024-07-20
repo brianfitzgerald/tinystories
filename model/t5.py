@@ -21,7 +21,7 @@ class T5FineTuner(SmModel):
 
         logger.info("Loading T5 model")
         self.model: T5ForConditionalGeneration = (
-            T5ForConditionalGeneration.from_pretrained(params.base_model_checkpoint)
+            T5ForConditionalGeneration.from_pretrained(params.base_model_checkpoint, device_map=0)
         ) # type: ignore
         self.train_steps = 0
         self.save_hyperparameters()

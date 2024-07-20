@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=sm
+#SBATCH --job-name=smo
 #SBATCH --output=sm.out.%j
 #SBATCH --error=sm.out.%j
 #SBATCH --nodes=1
