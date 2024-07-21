@@ -132,10 +132,28 @@ CONFIGS = {
             max_seq_length=512,
         ),
     ),
+    # https://huggingface.co/blog/smollm
+    # https://github.com/huggingface/alignment-handbook/blob/main/recipes/zephyr-7b-gemma/sft/config_full.yaml
+    "smol_squad": ModelConfig(
+        T5FineTuner,
+        SquadDataModule,
+        "smollm-1.7b-squad",
+        LanguageModelHyperParams(
+            base_model_checkpoint="HuggingFaceTB/SmolLM-1.7B-Instruct",
+            learning_rate=2e-05,
+            warmup_ratio=0.1,
+            optimizer="AdamW",
+            train_batch_size=4,
+            val_batch_size=4,
+            gradient_accumulation_steps=4,
+            num_train_epochs=3,
+            max_seq_length=2048,
+        ),
+    ),
 }
 
 
-def main(wandb: bool = False, config: str = "squad_t5", run_name: Optional[str] = None):
+def main(wandb: bool = False, config: str = "smol_squad", run_name: Optional[str] = None):
 
     load_dotenv(".env")
 
