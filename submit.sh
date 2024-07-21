@@ -10,4 +10,4 @@
 #SBATCH --priority=normal
 
 
-python train.py --wandb
+python train.py --wandb --run_name lower_lr

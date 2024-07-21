@@ -1,4 +1,5 @@
 from loguru import logger
+from typing import Optional
 
 logger.level("INFO")
 logger.info("Loading dependencies - Torch...")
@@ -31,18 +32,11 @@ from model.callbacks import (
     HfModelCheckpoint,
     LogLLMPredictionSamplesCallback,
 )
-from model.llama import LlamaFineTuner
+from model.causal_lm import AutoLMFineTuner
 from model.pretrain.bert import SimpleBertForMaskedLM, get_sane_normalizers
 from model.pretrain.gpt import GPT
 from model.t5 import T5FineTuner
 from model.utils import LanguageModelHyperParams, ModelChoice, SmDataset, SmModel
-
-MODEL_CHOICES = {
-    SimpleBertForMaskedLM: ModelChoice.SIMPLE_BERT,
-    T5FineTuner: ModelChoice.T5,
-    LlamaFineTuner: ModelChoice.LLAMA,
-    GPT: ModelChoice.GPT,
-}
 
 
 @dataclass
@@ -60,7 +54,7 @@ SQUAD_QA_PROJECT = "t5-squad-qa"
 
 CONFIGS = {
     "fn_calling": ModelConfig(
-        LlamaFineTuner,
+        AutoLMFineTuner,
         FunctionCallingDataModule,
         "llama-function-calling",
         LanguageModelHyperParams("TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
@@ -127,7 +121,8 @@ CONFIGS = {
         SQUAD_QA_PROJECT,
         LanguageModelHyperParams(
             base_model_checkpoint="google/flan-t5-base",
-            learning_rate=3e-4,
+            learning_rate=1e-3,
+            adam_epsilon=1e-30,
             warmup_ratio=0.2,
             optimizer="Adafactor",
             train_batch_size=32,
@@ -140,7 +135,7 @@ CONFIGS = {
 }
 
 
-def main(wandb: bool = False, config: str = "squad_t5"):
+def main(wandb: bool = False, config: str = "squad_t5", run_name: Optional[str] = None):
 
     load_dotenv(".env")
 
@@ -157,7 +152,8 @@ def main(wandb: bool = False, config: str = "squad_t5"):
     model = model_config.model(hparams, tokenizer)
 
     wandb_logger = None
-    run_name = "".join(random.choices(string.ascii_letters + string.digits, k=4))
+    if not run_name:
+        run_name = "".join(random.choices(string.ascii_letters + string.digits, k=4))
     run_name = f"{config}-{run_name}"
 
     if wandb:
@@ -169,7 +165,7 @@ def main(wandb: bool = False, config: str = "squad_t5"):
     else:
         loggers.append(CSVLogger("logs", name=run_name))
 
-    model_choice: ModelChoice = MODEL_CHOICES[model.__class__]  # type: ignore
+    model_choice: ModelChoice = model.model_choice
     sample_callback = LogLLMPredictionSamplesCallback(
         tokenizer, model_choice, wandb_logger
     )

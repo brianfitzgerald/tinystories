@@ -25,7 +25,7 @@ OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
 
 class ModelChoice(Enum):
     T5 = "t5"
-    LLAMA = "llama"
+    CAUSAL_LM = "causal_lm"
     SIMPLE_BERT = "simple_bert"
     GPT = "gpt"
 
@@ -163,6 +163,7 @@ class SmModel(pl.LightningModule):
         super().__init__()
         self.params = hparams
         self.tokenizer = tokenizer
+        self.model_choice = ModelChoice.CAUSAL_LM
 
 
 def compute_metrics(inputs: List[str], generated: List[str]):

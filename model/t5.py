@@ -1,18 +1,22 @@
+import bitsandbytes as bnb
 from loguru import logger
+from torch import Tensor
+from torch.optim import AdamW
+from torchmetrics.text.perplexity import Perplexity
+from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 from transformers.optimization import (
     Adafactor,
-    get_inverse_sqrt_schedule,
     AdafactorSchedule,
+    get_inverse_sqrt_schedule,
 )
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import LanguageModelHyperParams, IGNORE_TOKEN_INDEX, SmModel
-from torch.optim import AdamW
-from torch import Tensor
-from torchmetrics.text.perplexity import Perplexity
-import bitsandbytes as bnb
 
-
-from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
+from model.utils import (
+    IGNORE_TOKEN_INDEX,
+    LanguageModelHyperParams,
+    ModelChoice,
+    SmModel,
+)
 
 
 class T5FineTuner(SmModel):
@@ -28,6 +32,7 @@ class T5FineTuner(SmModel):
         self.train_steps = 0
         self.save_hyperparameters()
         self.perplexity = Perplexity(ignore_index=self.tokenizer.pad_token_id)
+        self.model_choice = ModelChoice.T5
 
     def forward(
         self,

@@ -1,24 +1,24 @@
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import LanguageModelHyperParams, SmModel
+from model.utils import LanguageModelHyperParams, SmModel, ModelChoice
 from torch.optim import AdamW
 
-import lightning.pytorch as pl
+from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+from transformers.models.auto.tokenization_auto import AutoTokenizer
+from transformers.modeling_utils import PreTrainedModel
 
-from transformers.models.llama.modeling_llama import LlamaForCausalLM
-from transformers.models.llama.tokenization_llama import LlamaTokenizer
 
-
-class LlamaFineTuner(SmModel):
+class AutoLMFineTuner(SmModel):
     def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
         self.params = params
         self.hparams.update(vars(params))
+        self.model_choice = ModelChoice.CAUSAL_LM
 
-        self.model: LlamaForCausalLM = LlamaForCausalLM.from_pretrained(
+        self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             params.base_model_checkpoint
-        )
-        self.tokenizer = LlamaTokenizer.from_pretrained(params.base_model_checkpoint)
+        ) # type: ignore
+        self.tokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
         self.save_hyperparameters()
@@ -31,13 +31,12 @@ class LlamaFineTuner(SmModel):
         )
         return out
 
-    def _step(self, batch):
+    def _step(self, batch: dict):
         outputs = self(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
             labels=batch["labels"],
         )
-        print(f"Loss: {outputs.loss}")
 
         return outputs.loss
 
