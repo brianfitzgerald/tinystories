@@ -114,17 +114,18 @@ def print_result_dicts(
         [clean_message(row[column]) for column in columns] for row in results
     ]
 
-    col_widths = [35] * len(columns)
+    col_widths = [40] * len(columns)
     for i, column in enumerate(columns):
         col = results[0][column]
         if isinstance(col, str) and col.isdigit():
             col_widths[i] = 10
 
+    print("\n\n")
     print(
         tabulate(
             new_dataset_row_elements,
             headers=columns,
-            tablefmt="simple",
+            tablefmt="simple_grid",
             maxcolwidths=col_widths,
         )
     )

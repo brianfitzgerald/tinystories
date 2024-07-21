@@ -1,5 +1,6 @@
 from loguru import logger
 
+logger.level("INFO")
 logger.info("Loading dependencies - Torch...")
 import random
 import string
@@ -126,13 +127,14 @@ CONFIGS = {
         SQUAD_QA_PROJECT,
         LanguageModelHyperParams(
             base_model_checkpoint="google/flan-t5-base",
-            learning_rate=0.001,
+            learning_rate=3e-4,
             warmup_ratio=0.2,
-            optimizer="AdamW",
-            train_batch_size=4,
+            optimizer="Adafactor",
+            train_batch_size=32,
             val_batch_size=16,
-            gradient_accumulation_steps=16,
+            gradient_accumulation_steps=4,
             num_train_epochs=100,
+            max_seq_length=512,
         ),
     ),
 }
@@ -204,6 +206,13 @@ def main(wandb: bool = False, config: str = "squad_t5"):
 
     progress_bar_callback = TQDMProgressBar(refresh_rate=1)
     precision = "32" if model_config.model == T5FineTuner else "16-mixed"
+
+    effective_batch_size = (
+        hparams.train_batch_size * hparams.gradient_accumulation_steps
+    )
+    logger.info(
+        f"Effective batch size: {effective_batch_size} ({hparams.gradient_accumulation_steps}x{hparams.train_batch_size})"
+    )
 
     trainer = pl.Trainer(
         accumulate_grad_batches=hparams.gradient_accumulation_steps,

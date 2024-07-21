@@ -16,13 +16,15 @@ from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 
 
 class T5FineTuner(SmModel):
-    def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(
+        self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
+    ) -> None:
         super().__init__(params, tokenizer)
 
         logger.info("Loading T5 model")
         self.model: T5ForConditionalGeneration = (
             T5ForConditionalGeneration.from_pretrained(params.base_model_checkpoint)
-        ) # type: ignore
+        )  # type: ignore
         self.train_steps = 0
         self.save_hyperparameters()
         self.perplexity = Perplexity(ignore_index=self.tokenizer.pad_token_id)
@@ -54,6 +56,8 @@ class T5FineTuner(SmModel):
         return outputs.loss, perplexity
 
     def training_step(self, batch, batch_idx):
+        # debug_tokens = self.tokenizer.decode(batch['input_ids'][0].tolist())
+        # logger.debug(f"Debug input: {debug_tokens}")
         loss, perplexity = self._step(batch)
         self.log(
             "train_ppl",
@@ -61,7 +65,7 @@ class T5FineTuner(SmModel):
             on_step=True,
             on_epoch=True,
             logger=True,
-            prog_bar=False
+            prog_bar=False,
         )
         self.log(
             "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
@@ -76,7 +80,7 @@ class T5FineTuner(SmModel):
             on_step=True,
             on_epoch=True,
             logger=True,
-            prog_bar=False
+            prog_bar=False,
         )
         self.log(
             "val_loss",
@@ -93,7 +97,7 @@ class T5FineTuner(SmModel):
 
         # emulates the original optimizer in https://github.com/google-research/bert/blob/master/optimization.py#L65
         no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
+        optimizer_groups = [
             {
                 "params": [
                     p
@@ -117,13 +121,13 @@ class T5FineTuner(SmModel):
         if optim_choice in ["AdamW", "AdamW8bit"]:
             if optim_choice == "AdamW":
                 optimizer = AdamW(
-                    optimizer_grouped_parameters,
+                    optimizer_groups,
                     lr=self.params.learning_rate,
                     eps=self.params.adam_epsilon,
                 )
             elif optim_choice == "AdamW8bit":
                 optimizer = bnb.optim.adamw.AdamW8bit(
-                    optimizer_grouped_parameters,
+                    optimizer_groups,
                     lr=self.params.learning_rate,
                     eps=self.params.adam_epsilon,
                 )
@@ -135,7 +139,7 @@ class T5FineTuner(SmModel):
             )
         elif optim_choice == "Adafactor":
             optimizer = Adafactor(
-                optimizer_grouped_parameters,
+                optimizer_groups,
                 lr=self.params.learning_rate,
                 eps=(self.params.adam_epsilon, 1e-3),
                 clip_threshold=1.0,
