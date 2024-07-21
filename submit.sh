@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --account=engineering
-#SBATCH --partition=h80i
+#SBATCH --partition=p5
 #SBATCH --priority=normal
 
 
