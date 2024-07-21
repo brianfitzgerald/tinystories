@@ -125,7 +125,7 @@ class LogLLMPredictionSamplesCallback(pl.Callback):
             labels[labels[:, :] == IGNORE_TOKEN_INDEX] = PAD_TOKEN_ID
             out = pl_module.model.generate(
                 input_ids,
-                max_length=self.max_new_tokens,
+                max_new_tokens=self.max_new_tokens,
             )
 
             for feature in [input_ids, out, labels]:

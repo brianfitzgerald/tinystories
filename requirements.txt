@@ -24,3 +24,5 @@ anthropic
 pillow==10.4.0
 loguru
 webdataset
+wheel
+flash-attn

@@ -61,7 +61,7 @@ class SquadDataModule(SmDataset):
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
-        self.cache_dir = "dataset_caches/squad"
+        self.cache_dir = f"dataset_caches/squad_len_{max_token_length}"
         self.dataset_name = "rajpurkar/squad_v2"
 
     def process_samples_batch(self, samples: LazyBatch):

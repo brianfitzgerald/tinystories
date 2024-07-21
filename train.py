@@ -135,7 +135,7 @@ CONFIGS = {
     # https://huggingface.co/blog/smollm
     # https://github.com/huggingface/alignment-handbook/blob/main/recipes/zephyr-7b-gemma/sft/config_full.yaml
     "smol_squad": ModelConfig(
-        T5FineTuner,
+        AutoLMFineTuner,
         SquadDataModule,
         "smollm-1.7b-squad",
         LanguageModelHyperParams(

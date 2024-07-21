@@ -16,7 +16,7 @@ class AutoLMFineTuner(SmModel):
         self.model_choice = ModelChoice.CAUSAL_LM
 
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
-            params.base_model_checkpoint
+            params.base_model_checkpoint, trust_remote_code=True
         ) # type: ignore
         self.tokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)
         self.ckpt_name = params.base_model_checkpoint
