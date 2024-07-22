@@ -6,6 +6,7 @@ logger.info("Loading dependencies - Torch...")
 import random
 import string
 from dataclasses import dataclass
+import torch
 
 from dotenv import load_dotenv
 from fire import Fire
@@ -123,12 +124,12 @@ CONFIGS = {
             base_model_checkpoint="google/flan-t5-base",
             learning_rate=1e-3,
             adam_epsilon=1e-30,
-            warmup_ratio=0.2,
+            warmup_ratio=0.1,
             optimizer="Adafactor",
             train_batch_size=32,
             val_batch_size=16,
             gradient_accumulation_steps=4,
-            num_train_epochs=100,
+            num_train_epochs=10,
             max_seq_length=512,
         ),
     ),
@@ -153,7 +154,11 @@ CONFIGS = {
 }
 
 
-def main(wandb: bool = False, config: str = "smol_squad", run_name: Optional[str] = None):
+def main(
+    wandb: bool = False, config: str = "squad_t5", run_name: Optional[str] = None, **kwargs
+):
+
+    assert not kwargs, f"Unknown arguments: {kwargs}"
 
     load_dotenv(".env")
 
@@ -170,9 +175,11 @@ def main(wandb: bool = False, config: str = "smol_squad", run_name: Optional[str
     model = model_config.model(hparams, tokenizer)
 
     wandb_logger = None
-    if not run_name:
-        run_name = "".join(random.choices(string.ascii_letters + string.digits, k=4))
-    run_name = f"{config}-{run_name}"
+    suffix = "".join(random.choices(string.ascii_letters + string.digits, k=4))
+    if run_name:
+        run_name = f"{config}-{run_name}-{suffix}"
+    else:
+        run_name = f"{config}-{suffix}"
 
     if wandb:
         wandb_logger = WandbLogger(

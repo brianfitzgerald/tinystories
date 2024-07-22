@@ -44,7 +44,7 @@ class LanguageModelHyperParams:
     num_train_epochs: int = 25
     gradient_accumulation_steps: int = 2
     n_gpus: int = 1
-    max_grad_norm: float = 1.0
+    max_grad_norm: Optional[float] = None
     seed: int = 42
     weight_decay: float = 0.0
     optimizer: OptimizerChoice = "AdamW8bit"

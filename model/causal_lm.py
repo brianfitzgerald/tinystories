@@ -9,7 +9,9 @@ from transformers.modeling_utils import PreTrainedModel
 
 
 class AutoLMFineTuner(SmModel):
-    def __init__(self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer) -> None:
+    def __init__(
+        self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
+    ) -> None:
         super().__init__(params, tokenizer)
         self.params = params
         self.hparams.update(vars(params))
@@ -17,7 +19,7 @@ class AutoLMFineTuner(SmModel):
 
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             params.base_model_checkpoint, trust_remote_code=True
-        ) # type: ignore
+        )  # type: ignore
         self.tokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0

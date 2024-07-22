@@ -142,23 +142,20 @@ class T5FineTuner(SmModel):
                     self.trainer.estimated_stepping_batches
                 ),
             )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                },
+            }
         elif optim_choice == "Adafactor":
             optimizer = Adafactor(
                 optimizer_groups,
                 lr=self.params.learning_rate,
                 eps=(self.params.adam_epsilon, 1e-3),
-                clip_threshold=1.0,
-                decay_rate=-0.8,
-                beta1=None,
-                weight_decay=0.0,
-                scale_parameter=False,
                 relative_step=False,
-                warmup_init=False,
+                scale_parameter=False,
             )
-            scheduler = AdafactorSchedule(optimizer)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-            },
-        }
+            return {
+                "optimizer": optimizer,
+            }
