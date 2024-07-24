@@ -31,7 +31,7 @@ class ModelChoice(Enum):
 
 
 @dataclass
-class LanguageModelHyperParams:
+class LMHyperParams:
     base_model_checkpoint: str = "google/flan-t5-small"
     tokenizer_checkpoint: Optional[str] = "google/flan-t5-small"
     max_seq_length: int = 2048
@@ -158,7 +158,7 @@ class SmDataset(pl.LightningDataModule):
 
 class SmModel(pl.LightningModule):
     def __init__(
-        self, hparams: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
+        self, hparams: LMHyperParams, tokenizer: PreTrainedTokenizer
     ) -> None:
         super().__init__()
         self.params = hparams

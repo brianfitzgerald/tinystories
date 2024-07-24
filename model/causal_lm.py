@@ -1,6 +1,6 @@
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import LanguageModelHyperParams, SmModel, ModelChoice
+from model.utils import LMHyperParams, SmModel, ModelChoice
 from torch.optim import AdamW
 
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
@@ -10,7 +10,7 @@ from transformers.modeling_utils import PreTrainedModel
 
 class AutoLMFineTuner(SmModel):
     def __init__(
-        self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
+        self, params: LMHyperParams, tokenizer: PreTrainedTokenizer
     ) -> None:
         super().__init__(params, tokenizer)
         self.params = params

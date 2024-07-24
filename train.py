@@ -6,7 +6,6 @@ logger.info("Loading dependencies - Torch...")
 import random
 import string
 from dataclasses import dataclass
-import torch
 
 from dotenv import load_dotenv
 from fire import Fire
@@ -37,7 +36,7 @@ from model.causal_lm import AutoLMFineTuner
 from model.pretrain.bert import SimpleBertForMaskedLM, get_sane_normalizers
 from model.pretrain.gpt import GPT
 from model.t5 import T5FineTuner
-from model.utils import LanguageModelHyperParams, ModelChoice, SmDataset, SmModel
+from model.utils import LMHyperParams, ModelChoice, SmDataset, SmModel
 
 
 @dataclass
@@ -45,7 +44,7 @@ class ModelConfig:
     model: type[SmModel]
     data_module: type[SmDataset]
     wandb_project_name: str
-    hyperparams: LanguageModelHyperParams
+    hyperparams: LMHyperParams
 
 
 PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
@@ -58,25 +57,25 @@ CONFIGS = {
         AutoLMFineTuner,
         FunctionCallingDataModule,
         "llama-function-calling",
-        LanguageModelHyperParams("TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
+        LMHyperParams("TinyLlama/TinyLlama-1.1B-Chat-v1.0"),
     ),
     "prompt_upsample_small": ModelConfig(
         T5FineTuner,
         PromptUpsampleDataModule,
         PROMPT_UPSAMPLING_PROJECT,
-        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-small"),
+        LMHyperParams(base_model_checkpoint="google/flan-t5-small"),
     ),
     "prompt_upsample": ModelConfig(
         T5FineTuner,
         PromptUpsampleDataModule,
         PROMPT_UPSAMPLING_PROJECT,
-        LanguageModelHyperParams(base_model_checkpoint="google/flan-t5-base"),
+        LMHyperParams(base_model_checkpoint="google/flan-t5-base"),
     ),
     "simple_bert_pretrain": ModelConfig(
         SimpleBertForMaskedLM,
         BertPretrainDataset,
         "simple-bert-pretrain",
-        LanguageModelHyperParams(
+        LMHyperParams(
             # base model is only used for tokenizer
             base_model_checkpoint="bert-base-uncased",
             learning_rate=1e-3,
@@ -93,7 +92,7 @@ CONFIGS = {
         GPT,
         TinyStoriesDataset,
         "tinystories-gpt-pretrain",
-        LanguageModelHyperParams(
+        LMHyperParams(
             learning_rate=1e-4,
             warmup_ratio=0.1,
             weight_decay=0.01,
@@ -110,17 +109,17 @@ CONFIGS = {
         T5FineTuner,
         SquadExtractiveQADataModule,
         EXTRACTIVE_QA_PROJECT,
-        LanguageModelHyperParams(
+        LMHyperParams(
             base_model_checkpoint="google/flan-t5-base",
             warmup_ratio=0.2,
             optimizer="Adafactor",
         ),
     ),
-    "squad_t5": ModelConfig(
+    "t5_squad": ModelConfig(
         T5FineTuner,
         SquadDataModule,
         SQUAD_QA_PROJECT,
-        LanguageModelHyperParams(
+        LMHyperParams(
             base_model_checkpoint="google/flan-t5-base",
             learning_rate=1e-3,
             adam_epsilon=1e-30,
@@ -139,7 +138,7 @@ CONFIGS = {
         AutoLMFineTuner,
         SquadDataModule,
         "smollm-1.7b-squad",
-        LanguageModelHyperParams(
+        LMHyperParams(
             base_model_checkpoint="HuggingFaceTB/SmolLM-1.7B-Instruct",
             learning_rate=2e-05,
             warmup_ratio=0.1,
@@ -155,7 +154,10 @@ CONFIGS = {
 
 
 def main(
-    wandb: bool = False, config: str = "squad_t5", run_name: Optional[str] = None, **kwargs
+    wandb: bool = False,
+    config: str = "t5_squad",
+    run_name: Optional[str] = None,
+    **kwargs,
 ):
 
     assert not kwargs, f"Unknown arguments: {kwargs}"

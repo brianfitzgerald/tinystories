@@ -2,27 +2,26 @@ import bitsandbytes as bnb
 from loguru import logger
 from torch import Tensor
 from torch.optim import AdamW
-from torchmetrics.text.perplexity import Perplexity
+from torchmetrics.functional import f1_score, precision, recall, perplexity
+from torchmetrics.text.ter import TranslationEditRate
 from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 from transformers.optimization import (
     Adafactor,
-    AdafactorSchedule,
     get_inverse_sqrt_schedule,
 )
 from transformers.tokenization_utils import PreTrainedTokenizer
+from typing import Tuple, Dict
 
 from model.utils import (
     IGNORE_TOKEN_INDEX,
-    LanguageModelHyperParams,
+    LMHyperParams,
     ModelChoice,
     SmModel,
 )
 
 
 class T5FineTuner(SmModel):
-    def __init__(
-        self, params: LanguageModelHyperParams, tokenizer: PreTrainedTokenizer
-    ) -> None:
+    def __init__(self, params: LMHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
 
         logger.info("Loading T5 model")
@@ -31,7 +30,7 @@ class T5FineTuner(SmModel):
         )  # type: ignore
         self.train_steps = 0
         self.save_hyperparameters()
-        self.perplexity = Perplexity(ignore_index=self.tokenizer.pad_token_id)
+        self.ter = TranslationEditRate(ignore_index=self.tokenizer.pad_token_id)
         self.model_choice = ModelChoice.T5
 
     def forward(
@@ -49,53 +48,60 @@ class T5FineTuner(SmModel):
             labels=labels,
         )
 
-    def _step(self, batch):
+    def _step(self, batch: Dict, split: str) -> Tuple[Tensor, Tensor]:
         outputs = self(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
             decoder_attention_mask=batch["decoder_attention_mask"],
             labels=batch["labels"],
         )
-        perplexity = self.perplexity(outputs.logits, batch["labels"])
+        self.log(
+            f"{split}_ppl",
+            perplexity(outputs.logits, outputs.labels),
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+        )
+        self.log(
+            f"{split}_ter",
+            self.ter(outputs.logits, outputs.labels),
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+        )
+        self.log(
+            f"{split}_precision",
+            precision(outputs.logits, outputs.labels, average="macro", task="multiclass"),
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+        )
+        self.log(
+            f"{split}_recall",
+            recall(outputs.logits, outputs.labels, average="macro", task="multiclass"),
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+        )
+        self.log(
+            f"{split}_f1",
+            f1_score(outputs.logits, outputs.labels, average="macro", task="multiclass"),
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+        )
 
-        return outputs.loss, perplexity
+        return outputs.loss
 
     def training_step(self, batch, batch_idx):
         # debug_tokens = self.tokenizer.decode(batch['input_ids'][0].tolist())
         # logger.debug(f"Debug input: {debug_tokens}")
-        loss, perplexity = self._step(batch)
-        self.log(
-            "train_ppl",
-            perplexity,
-            on_step=True,
-            on_epoch=True,
-            logger=True,
-            prog_bar=False,
-        )
-        self.log(
-            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
-        return {"loss": loss}
+        loss = self._step(batch, "train")
+        return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, perplexity = self._step(batch)
-        self.log(
-            "val_ppl",
-            perplexity,
-            on_step=True,
-            on_epoch=True,
-            logger=True,
-            prog_bar=False,
-        )
-        self.log(
-            "val_loss",
-            loss,
-            on_step=True,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-        )
-        return {"val_loss": loss}
+        loss = self._step(batch, "validation")
+        return loss
 
     def configure_optimizers(self):
         "Prepare optimizer and schedule (linear warmup and decay)"
