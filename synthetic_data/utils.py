@@ -18,7 +18,7 @@ JSONSchema = Dict[str, JSONSchemaKey]
 
 
 @dataclass
-class SquadExtractiveQARow:
+class ExtractiveQARow:
     id: str
     context: str
     json_schema: JSONSchema
@@ -224,3 +224,4 @@ async def gather_with_concurrency_limit(n: int, *coros):
             return await coro
 
     return await asyncio.gather(*(sem_coro(c) for c in coros))
+

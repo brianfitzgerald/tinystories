@@ -2,6 +2,7 @@ import asyncio
 import os
 from typing import Dict, List, Optional, cast
 import pandas as pd
+from loguru import logger
 
 import fire
 from datasets import Dataset, load_dataset
@@ -15,7 +16,8 @@ from synthetic_data.tasks import (
     SFTDataTask,
     Toolformer,
     SyntheticToolCalls,
-    SquadExtractiveQA
+    SquadExtractiveQA,
+    DollyEntityExtraction
 )
 
 from synthetic_data.generation import (
@@ -38,6 +40,7 @@ DATA_TASKS: Dict[str, type[SFTDataTask]] = {
     "prompt_upsample": PromptUpsample,
     "synthetic_tool_calls": SyntheticToolCalls,
     "squad_extractive_qa": SquadExtractiveQA,
+    "dolly_entity_extraction": DollyEntityExtraction,
 }
 
 MODEL_WRAPPER_CLASSES = {
@@ -57,7 +60,7 @@ def main(
     pairs: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.ANTHROPIC,
-    task_name: str = "squad_extractive_qa",
+    task_name: str = "dolly_entity_extraction",
     n_epochs: int = 1,
     **kwargs,
 ):
@@ -76,11 +79,11 @@ def main(
     if pairs and not isinstance(task, DPODataTask):
         raise ValueError("generate_pairs is only supported for DPO tasks.")
 
-    print("Logging into the Hub...")
+    logger.info("Logging into the Hub...")
     current_dir = os.path.dirname(os.path.abspath(__file__))
     dotenv = dotenv_values(os.path.join(current_dir, ".env"))
     hf_token = dotenv["HF_TOKEN"]
-    print(f"Logging in with token: {hf_token}")
+    logger.info(f"Logging in with token: {hf_token}")
     login(token=hf_token, add_to_git_credential=True)
 
     model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
@@ -89,7 +92,7 @@ def main(
         task.empty_dpo_dataset_format if pairs and is_dpo_task else task.empty_dataset_format
     )
 
-    print("Loading output dataset...")
+    logger.info("Loading output dataset...")
     if restart:
         output_dataset = Dataset.from_dict(empty_dataset_format)
     else:
@@ -103,7 +106,7 @@ def main(
             )
             # TODO filter for rows that don't need completion
         except (EmptyDatasetError, ValueError):
-            print("No existing dataset found, starting from scratch...")
+            logger.info("No existing dataset found, starting from scratch...")
             output_dataset = Dataset.from_dict(empty_dataset_format)
 
     input_dataset: Dataset
@@ -117,7 +120,7 @@ def main(
     elif task.seed_data_format == SeedDataFormat.TSV:
         input_dataset_location = task.seed_data_location
 
-    print(
+    logger.info(
         f"Loading input dataset: {input_dataset_location}, format: {task.seed_data_format.value}"
     )
     split = "train"
@@ -127,7 +130,7 @@ def main(
         or pairs
     ):
         if len(output_dataset) > 0 and resume_input_position:
-            print(f"Resuming from position {len(output_dataset)}")
+            logger.info(f"Resuming from position {len(output_dataset)}")
             split = f"train[{len(output_dataset)}:]"
         input_dataset = cast(Dataset, load_dataset(input_dataset_location, split=split))
     elif task.seed_data_format == SeedDataFormat.TSV:
@@ -135,10 +138,12 @@ def main(
         input_dataset = Dataset.from_pandas(seed_data)
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
+    
+    task.preprocess_dataset(input_dataset)
 
-    print(f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}")
+    logger.info(f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}")
     new_dataset_rows: List[Dict] = []
-    print("Running...")
+    logger.info("Running...")
 
     for i in range(n_epochs):
 
@@ -168,7 +173,7 @@ def main(
                 batch = cast(Dict, batch)
                 full_conversations_batch = task.format_input_conversation(batch)
 
-                print(f"Generating {len(full_conversations_batch)} completions...")
+                logger.info(f"Generating {len(full_conversations_batch)} completions...")
                 completions = asyncio.run(
                     model_wrapper.generate(full_conversations_batch)
                 )

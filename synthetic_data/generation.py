@@ -140,7 +140,7 @@ class AnthropicGenerationWrapper(GenerationWrapper):
                     conversation = conversation[1:]
                 conversation = cast(List[MessageParam], conversation)
                 request = self.client.messages.create(
-                    model="claude-3-sonnet-20240229",
+                    model="claude-3-5-sonnet-20240620",
                     system=system_prompt,
                     messages=conversation,
                     max_tokens=512,
@@ -150,7 +150,7 @@ class AnthropicGenerationWrapper(GenerationWrapper):
                 4, *completion_requests
             )
             completions = [
-                result.content[0].text
+                result.content[0].text # type: ignore
                 for result in results
                 if result.content is not None
             ]

@@ -53,7 +53,7 @@ There are a few rules to follow:
     return user_conversation
 
 
-def format_squad_extractive_json_template(context: str) -> Conversation:
+def format_entity_extraction_conversation_template(context: str) -> Conversation:
     """
     Prepares the system and user-assistant style messages for inference.
 

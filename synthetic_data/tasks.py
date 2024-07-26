@@ -7,7 +7,7 @@ from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
     TOOL_USE_CATEGORIES,
     format_dalle_prompt_template,
-    format_squad_extractive_json_template,
+    format_entity_extraction_conversation_template,
     get_tool_usage_prompt,
     get_toolformer_dpo_negative_completion_prompt,
     get_toolformer_prompt,
@@ -20,6 +20,8 @@ from synthetic_data.tools import (
 )
 import json
 from pydantic import ValidationError
+from datasets import Dataset
+from loguru import logger
 
 from synthetic_data.utils import (
     Conversation,
@@ -28,7 +30,7 @@ from synthetic_data.utils import (
     SyntheticToolCallDPORow,
     ToolFormerDPORow,
     ToolFormerRow,
-    SquadExtractiveQARow,
+    ExtractiveQARow,
     extract_json,
     is_valid_python,
     clean_message,
@@ -44,6 +46,9 @@ class SFTDataTask(ABC):
     output_dataset_org: str = "roborovski"
 
     empty_dataset_format: Dict[str, List]
+
+    def preprocess_dataset(self, dataset: Dataset) -> Dataset:
+        return dataset
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         """
@@ -431,10 +436,12 @@ class SquadExtractiveQA(SFTDataTask):
         prompts = batch["context"]
         self.ids = batch["id"]
         self.contexts = batch["context"]
-        return [format_squad_extractive_json_template(prompt) for prompt in prompts]
+        return [
+            format_entity_extraction_conversation_template(prompt) for prompt in prompts
+        ]
 
     def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
-        qa_rows: List[SquadExtractiveQARow] = []
+        qa_rows: List[ExtractiveQARow] = []
         for i, completion in enumerate(completions_batch):
             json_schema = extract_json(completion)
             if not json_schema or isinstance(json_schema, str):
@@ -448,7 +455,7 @@ class SquadExtractiveQA(SFTDataTask):
                 continue
 
             try:
-                qa_row = SquadExtractiveQARow(
+                qa_row = ExtractiveQARow(
                     self.ids[i],
                     self.contexts[i],
                     json_schema,
@@ -465,3 +472,19 @@ class SquadExtractiveQA(SFTDataTask):
             row["json_schema"] = json.dumps(row["json_schema"])
             out_rows.append(row)
         return out_rows
+
+
+def _filter_row(row: Dict) -> bool:
+    ctx = row["context"]
+    return ctx is not None and ctx.strip() != "" and len(ctx) > 800
+
+class DollyEntityExtraction(SquadExtractiveQA):
+    seed_data_location = "databricks/databricks-dolly-15k"
+    output_dataset_name = "dolly-entity-extraction"
+
+    def preprocess_dataset(self, dataset: Dataset) -> Dataset:
+        logger.info(f"Original dataset length: {len(dataset)}")
+        dataset = dataset.filter(_filter_row)
+        logger.info(f"Filtered dataset length: {len(dataset)}")
+        return dataset
+
