@@ -434,7 +434,6 @@ class SquadExtractiveQA(SFTDataTask):
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         prompts = batch["context"]
-        self.ids = batch["id"]
         self.contexts = batch["context"]
         return [
             format_entity_extraction_conversation_template(prompt) for prompt in prompts
@@ -456,7 +455,6 @@ class SquadExtractiveQA(SFTDataTask):
 
             try:
                 qa_row = ExtractiveQARow(
-                    self.ids[i],
                     self.contexts[i],
                     json_schema,
                     list(row_fields),
@@ -476,7 +474,7 @@ class SquadExtractiveQA(SFTDataTask):
 
 def _filter_row(row: Dict) -> bool:
     ctx = row["context"]
-    return ctx is not None and ctx.strip() != "" and len(ctx) > 800
+    return ctx is not None and ctx != ""
 
 class DollyEntityExtraction(SquadExtractiveQA):
     seed_data_location = "databricks/databricks-dolly-15k"

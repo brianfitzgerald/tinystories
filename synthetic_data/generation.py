@@ -143,6 +143,7 @@ class AnthropicGenerationWrapper(GenerationWrapper):
                     model="claude-3-5-sonnet-20240620",
                     system=system_prompt,
                     messages=conversation,
+                    temperature=0,
                     max_tokens=512,
                 )
                 completion_requests.append(request)

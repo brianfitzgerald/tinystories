@@ -139,7 +139,7 @@ def main(
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
     
-    task.preprocess_dataset(input_dataset)
+    input_dataset = task.preprocess_dataset(input_dataset)
 
     logger.info(f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}")
     new_dataset_rows: List[Dict] = []

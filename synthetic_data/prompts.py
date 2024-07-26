@@ -79,14 +79,6 @@ In his native Poland, in France, where he composed most of his works, and beyond
         system_message,
         {
             "role": "user",
-            "content": example_context,
-        },
-        {
-            "role": "assistant",
-            "content": json.dumps(example_json_output),
-        },
-        {
-            "role": "user",
             "content": context,
         },
     ]
