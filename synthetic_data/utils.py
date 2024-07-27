@@ -20,7 +20,8 @@ JSONSchema = Dict[str, JSONSchemaKey]
 @dataclass
 class ExtractiveQARow:
     context: str
-    json_schema: JSONSchema
+    json_query: JSONSchema
+    json_data: JSONSchema
 
 
 @dataclass
@@ -184,7 +185,6 @@ def clean_example(text):
     return cleaned_paragraph.strip()
 
 
-JSON_MATCH_PATTERN = r"{.*}"
 
 
 def recursive_json_parse(data: str) -> Optional[Union[Dict, str]]:
@@ -198,20 +198,22 @@ def recursive_json_parse(data: str) -> Optional[Union[Dict, str]]:
         return {key: recursive_json_parse(value) for key, value in data.items()}
     return data
 
+JSON_MATCH_PATTERN = r'```(?:json)?\n(.*?)\n```'
 
-def extract_json(msg: str) -> Optional[JSONSchema]:
+def extract_json_code_blocks(msg: str) -> List[JSONSchema]:
     """
-    Parse out JSON from a string, and return the parsed JSON object.
+    Parse out JSON code blocks from Markdown or plain text.
     Works even if the JSON is embedded deep in a string or with recursive serialization.
     """
-    msg = msg.replace("'", "").replace("\n", "")
-    match = re.search(JSON_MATCH_PATTERN, msg)
+    blocks = re.findall(JSON_MATCH_PATTERN, msg, re.DOTALL)
 
-    if match:
-        json_str = match.group(0)
-        json_obj = recursive_json_parse(json_str)
-        return json_obj  # type: ignore
-    return None
+    res = []
+    for match in blocks:
+        match = match.strip()
+        if match:
+            json_obj = recursive_json_parse(match)
+            res.append(json_obj)
+    return res
 
 
 async def gather_with_concurrency_limit(n: int, *coros):

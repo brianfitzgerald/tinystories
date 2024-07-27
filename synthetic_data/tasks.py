@@ -31,7 +31,7 @@ from synthetic_data.utils import (
     ToolFormerDPORow,
     ToolFormerRow,
     ExtractiveQARow,
-    extract_json,
+    extract_json_code_blocks,
     is_valid_python,
     clean_message,
     get_matches,
@@ -210,7 +210,7 @@ class Toolformer(DPODataTask):
                 row_dict = output_row.__dict__
                 new_rows_batch.append(row_dict)
             except Exception as e:
-                print(f"Error in parsing completion: {e}")
+                logger.error(f"Error in parsing completion: {e}")
                 continue
 
         return new_rows_batch
@@ -276,7 +276,7 @@ class SyntheticToolCalls(DPODataTask):
                     }
                 )
             except Exception as e:
-                print(f"Error in parsing seed completion: {e}")
+                logger.error(f"Error in parsing seed completion: {e}")
                 continue
         return batch
 
@@ -307,7 +307,7 @@ class SyntheticToolCalls(DPODataTask):
                     conversations_batch.append(conversation)
                     original_rows_batch.append(original_row)
                 except Exception as e:
-                    print(f"Error in formatting DPO input: {e}")
+                    logger.error(f"Error in formatting DPO input: {e}")
                     traceback.print_exc()
                     continue
         self.original_rows_batch = original_rows_batch
@@ -343,7 +343,7 @@ class SyntheticToolCalls(DPODataTask):
 
             except Exception as e:
                 traceback.print_exc()
-                print(f"Error in parsing completion: {e}")
+                logger.error(f"Error in parsing completion: {e}")
                 continue
 
         return new_rows_batch
@@ -440,32 +440,35 @@ class SquadExtractiveQA(SFTDataTask):
         ]
 
     def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
-        qa_rows: List[ExtractiveQARow] = []
+        parsed_rows: List[ExtractiveQARow] = []
         for i, completion in enumerate(completions_batch):
-            json_schema = extract_json(completion)
-            if not json_schema or isinstance(json_schema, str):
-                print(f"Could not extract JSON from completion: {completion}")
+            blocks = extract_json_code_blocks(completion)
+            if len(blocks) != 2:
+                logger.warning(f"Could not extract JSON from completion: {completion}")
                 continue
-            field_names = set(json_schema.keys())
+            json_data, json_query = blocks
+            field_names = set(json_data.keys()).union(json_query.keys())
 
             if len(field_names) == 0:
-                print(f"Empty JSON schema for completion: {completion}")
+                logger.warning(f"Empty JSON schema for completion: {completion}")
                 continue
 
             try:
                 qa_row = ExtractiveQARow(
                     self.contexts[i],
-                    json_schema,
+                    json_query,
+                    json_data,
                 )
             except ValidationError as e:
-                print(f"Error in formatting completion: {e}")
+                logger.warning(f"Error in formatting completion: {e}")
                 continue
-            qa_rows.append(qa_row)
+            parsed_rows.append(qa_row)
 
         out_rows = []
-        for row in qa_rows:
+        for row in parsed_rows:
             row = row.__dict__
-            row["json_schema"] = json.dumps(row["json_schema"])
+            for key in ["json_query", "json_data"]:
+                row[key] = json.dumps(row[key])
             out_rows.append(row)
         return out_rows
 
@@ -473,6 +476,7 @@ class SquadExtractiveQA(SFTDataTask):
 def _filter_row(row: Dict) -> bool:
     ctx = row["context"]
     return ctx is not None and ctx != ""
+
 
 class DollyEntityExtraction(SquadExtractiveQA):
     seed_data_location = "databricks/databricks-dolly-15k"
@@ -483,4 +487,3 @@ class DollyEntityExtraction(SquadExtractiveQA):
         dataset = dataset.filter(_filter_row)
         logger.info(f"Filtered dataset length: {len(dataset)}")
         return dataset
-

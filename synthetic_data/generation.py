@@ -140,7 +140,7 @@ class AnthropicGenerationWrapper(GenerationWrapper):
                     model="claude-3-5-sonnet-20240620",
                     messages=conversation,
                     temperature=0,
-                    max_tokens=512,
+                    max_tokens=4096,
                 )
                 completion_requests.append(request)
             results: List[Message] = await gather_with_concurrency_limit(
