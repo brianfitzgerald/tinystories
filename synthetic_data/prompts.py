@@ -60,28 +60,19 @@ def format_entity_extraction_conversation_template(context: str) -> Conversation
     Example messages come from the SQuAD dataset:
     https://rajpurkar.github.io/SQuAD-explorer/
     """
-    system_message: ChatCompletionMessageParam = {
-        "role": "system",
-        "content": "Give an example of structured data extraction from the following context in JSON form. Limit to only factual information about the subjects of the context, such as names, dates, locations, and numbers.",
-    }
 
-    example_context = """
-In his native Poland, in France, where he composed most of his works, and beyond, Chopin's music, his status as one of music's earliest superstars, his association (if only indirect) with political insurrection, his love life and his early death have made him, in the public consciousness, a leading symbol of the Romantic era. His works remain popular, and he has been the subject of numerous films and biographies of varying degrees of historical accuracy.
+    prompt = f"""
+Give an example of structured data extraction from the following context in JSON form. Return a query that requests data in a specific schema about an entity or event in the context, and the resulting data returned by that query.
+Limit to only factual information about the subjects of the query, such as names, dates, and other properties of the entities.
+<context>\n{context}\n</context>
 """
 
-    example_json_output = {
-        "composer": "Frédéric Chopin",
-        "locations": ["Poland", "France"],
-        "category": "Romantic era",
+    user_message: ChatCompletionMessageParam = {
+        "role": "user",
+        "content": prompt,
     }
 
-    return [
-        system_message,
-        {
-            "role": "user",
-            "content": context,
-        },
-    ]
+    return [user_message]
 
 
 CONVERT_WEIGHT_API_EXAMPLE = {

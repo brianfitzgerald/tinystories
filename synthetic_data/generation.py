@@ -135,13 +135,9 @@ class AnthropicGenerationWrapper(GenerationWrapper):
         try:
             completion_requests = []
             for conversation in conversations:
-                if conversation[0]["role"] == "system":
-                    system_prompt = conversation[0]["content"]
-                    conversation = conversation[1:]
                 conversation = cast(List[MessageParam], conversation)
                 request = self.client.messages.create(
                     model="claude-3-5-sonnet-20240620",
-                    system=system_prompt,
                     messages=conversation,
                     temperature=0,
                     max_tokens=512,

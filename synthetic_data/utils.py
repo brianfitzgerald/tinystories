@@ -21,7 +21,6 @@ JSONSchema = Dict[str, JSONSchemaKey]
 class ExtractiveQARow:
     context: str
     json_schema: JSONSchema
-    fields: List[str]
 
 
 @dataclass

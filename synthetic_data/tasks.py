@@ -447,7 +447,6 @@ class SquadExtractiveQA(SFTDataTask):
                 print(f"Could not extract JSON from completion: {completion}")
                 continue
             field_names = set(json_schema.keys())
-            row_fields = list(field_names)
 
             if len(field_names) == 0:
                 print(f"Empty JSON schema for completion: {completion}")
@@ -457,7 +456,6 @@ class SquadExtractiveQA(SFTDataTask):
                 qa_row = ExtractiveQARow(
                     self.contexts[i],
                     json_schema,
-                    list(row_fields),
                 )
             except ValidationError as e:
                 print(f"Error in formatting completion: {e}")

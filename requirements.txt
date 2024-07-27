@@ -26,3 +26,4 @@ loguru
 webdataset
 wheel
 flash-attn
+pytest
