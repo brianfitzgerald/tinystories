@@ -1,4 +1,4 @@
-from typing import Optional, cast
+from typing import Optional, cast, List
 from tabulate import tabulate
 import pandas as pd
 from pathlib import Path
@@ -21,6 +21,28 @@ from model.utils import (
     PAD_TOKEN_ID,
     ModelChoice,
 )
+
+
+def unpad_tensor_batch(tensor_batch: Tensor) -> List[Tensor]:
+    if tensor_batch.dim() != 2:
+        raise ValueError(
+            "Input tensor must be 2D (batch dimension + feature dimension)"
+        )
+
+    unpadded_tensors = []
+
+    for tensor in tensor_batch:
+        non_zero_indices = torch.nonzero(tensor, as_tuple=True)[0]
+
+        if non_zero_indices.numel() == 0:
+            unpadded_tensor = torch.tensor([])
+        else:
+            last_non_zero_index = non_zero_indices[-1].item()
+            unpadded_tensor = tensor[: last_non_zero_index + 1]
+
+        unpadded_tensors.append(unpadded_tensor)
+
+    return unpadded_tensors
 
 
 class LogLLMPredictionSamplesCallback(pl.Callback):
@@ -130,11 +152,8 @@ class LogLLMPredictionSamplesCallback(pl.Callback):
 
             for feature in [input_ids, out, labels]:
                 decoded = self.tokenizer.batch_decode(
-                    feature, clean_up_tokenization_spaces=True, skip_special_tokens=True
+                    feature, clean_up_tokenization_spaces=True
                 )
-                decoded = [
-                    s.replace("[PAD]", "").replace("<pad>", "").strip() for s in decoded
-                ]
                 table_columns.append(decoded)
 
         run_name = "latest"

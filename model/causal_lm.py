@@ -9,9 +9,7 @@ from transformers.modeling_utils import PreTrainedModel
 
 
 class AutoLMFineTuner(SmModel):
-    def __init__(
-        self, params: LMHyperParams, tokenizer: PreTrainedTokenizer
-    ) -> None:
+    def __init__(self, params: LMHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__(params, tokenizer)
         self.params = params
         self.hparams.update(vars(params))
@@ -26,6 +24,9 @@ class AutoLMFineTuner(SmModel):
         self.save_hyperparameters()
         if "smollm" in params.base_model_checkpoint:
             self.tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
+
+        assert self.model.generation_config
+        self.model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     def forward(self, input_ids, attention_mask, labels):
         out = self.model(
