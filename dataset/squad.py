@@ -4,6 +4,7 @@ import json
 from unidecode import unidecode
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 from synthetic_data.utils import ExtractiveQARow, ShareGPTConversation
@@ -108,11 +109,13 @@ class DollyEntityExtractionDataModule(SmDataset):
                 "content": sample["json_data"],
             }]
 
-            prompt_ids: Tensor = self.tokenizer.apply_chat_template(conversation, tokenize=True, max_length=self.max_token_length, padding='max_length', return_tensors="pt", truncation=True, add_generation_prompt=True)[0] # type: ignore
-            input_ids: Tensor = self.tokenizer.apply_chat_template(conversation_completion, tokenize=True, max_length=self.max_token_length, padding='max_length',  return_tensors="pt", truncation=True )[0] # type: ignore
+            prompt_ids: Tensor = self.tokenizer.apply_chat_template(conversation, tokenize=True, return_tensors="pt", add_generation_prompt=True)[0] # type: ignore
+            input_ids: Tensor = self.tokenizer.apply_chat_template(conversation_completion, tokenize=True, return_tensors="pt")[0] # type: ignore
 
             user_prompt_len = prompt_ids.shape[0]
             labels = torch.tensor([IGNORE_TOKEN_INDEX] * user_prompt_len + input_ids[user_prompt_len:].tolist())
+            labels = F.pad(labels, (0, self.max_token_length - labels.shape[0]), value=self.tokenizer.pad_token_id)
+            input_ids = F.pad(input_ids, (0, self.max_token_length - input_ids.shape[0]), value=self.tokenizer.pad_token_id)
 
             labels_out.append(labels)
             input_ids_out.append(input_ids)
