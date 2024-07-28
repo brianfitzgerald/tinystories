@@ -114,7 +114,6 @@ class SmDataset(pl.LightningDataModule):
         columns = [
             "input_ids",
             "attention_mask",
-            "decoder_attention_mask",
             "labels",
         ]
 
@@ -145,7 +144,6 @@ class SmDataset(pl.LightningDataModule):
         return {
             "input_ids": inputs_tokenized["input_ids"],
             "attention_mask": inputs_tokenized["attention_mask"],
-            "decoder_attention_mask": labels_tokenized["attention_mask"],
             "labels": labels_tokenized["input_ids"],
         }
 

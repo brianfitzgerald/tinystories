@@ -24,6 +24,8 @@ class AutoLMFineTuner(SmModel):
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
         self.save_hyperparameters()
+        if "smollm" in params.base_model_checkpoint:
+            self.tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
 
     def forward(self, input_ids, attention_mask, labels):
         out = self.model(

@@ -2,12 +2,14 @@ from typing import Tuple
 from datasets.formatting.formatting import LazyBatch
 import json
 from unidecode import unidecode
+import torch
+from torch import Tensor
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 from synthetic_data.utils import ExtractiveQARow, ShareGPTConversation
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
 
-from model.utils import SmDataset
+from model.utils import SmDataset, IGNORE_TOKEN_INDEX
 
 
 def format_squad_extractive(sample: dict) -> Tuple[str, str]:
@@ -81,9 +83,10 @@ class DollyEntityExtractionDataModule(SmDataset):
         self.cache_dir = f"dataset_caches/dolly_entity_extraction"
         self.dataset_name = "roborovski/dolly-entity-extraction"
         self.cpu_count = 1
+        self.max_token_length = max_token_length
 
     def process_samples_batch(self, samples: LazyBatch):
-        input_ids_out, labels_out = [], []
+        input_ids_out, labels_out, attention_masks_out = [], [], []
         for i in range(len(samples['context'])): # type: ignore
             sample = {k: v[i] for k, v in samples.items()}
 
@@ -101,14 +104,27 @@ class DollyEntityExtractionDataModule(SmDataset):
             }]
 
             conversation_completion = conversation + [{
-                "role": "user",
+                "role": "assistant",
                 "content": sample["json_data"],
             }]
 
-            conversation_completion_tokenized = self.tokenizer.apply_chat_template(conversation, tokenize=False)
-            conversation_no_completion_tokenized = self.tokenizer.apply_chat_template(conversation_completion, tokenize=False)
-            input_ids_out.append(conversation_no_completion_tokenized)
-            labels_out.append(conversation_completion_tokenized)
+            prompt_ids: Tensor = self.tokenizer.apply_chat_template(conversation, tokenize=True, max_length=self.max_token_length, padding='max_length', return_tensors="pt", truncation=True, add_generation_prompt=True)[0] # type: ignore
+            input_ids: Tensor = self.tokenizer.apply_chat_template(conversation_completion, tokenize=True, max_length=self.max_token_length, padding='max_length',  return_tensors="pt", truncation=True )[0] # type: ignore
 
-        return input_ids_out, labels_out
+            user_prompt_len = prompt_ids.shape[0]
+            labels = torch.tensor([IGNORE_TOKEN_INDEX] * user_prompt_len + input_ids[user_prompt_len:].tolist())
+
+            labels_out.append(labels)
+            input_ids_out.append(input_ids)
+            attention_masks_out.append(torch.ones_like(input_ids))
+
+        input_ids_out = torch.stack(input_ids_out)
+        labels_out = torch.stack(labels_out)
+        attention_masks_out = torch.stack(attention_masks_out)
+        return {
+            "input_ids": input_ids_out,
+            "attention_mask": attention_masks_out,
+            "labels": labels_out
+        }
+
 
