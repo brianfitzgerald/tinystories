@@ -24,7 +24,7 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 logger.info("Loading dependencies - Project...")
 from dataset.function_calling import FunctionCallingDataModule
-from dataset.squad import SquadExtractiveQADataModule, SquadDataModule
+from dataset.squad import SquadExtractiveQADataModule, SquadDataModule, DollyEntityExtractionDataModule
 from dataset.parti import PromptUpsampleDataModule
 from dataset.pretrain import BertPretrainDataset, TinyStoriesDataset
 from model.callbacks import (
@@ -51,6 +51,18 @@ PROMPT_UPSAMPLING_PROJECT = "t5-prompt-upsampling"
 PROMPT_SAFETY_PROJECT = "t5-prompt-safety"
 EXTRACTIVE_QA_PROJECT = "t5-extractive-qa"
 SQUAD_QA_PROJECT = "t5-squad-qa"
+
+SMOL_LM_HPARAMS = LMHyperParams(
+    base_model_checkpoint="HuggingFaceTB/SmolLM-1.7B-Instruct",
+    learning_rate=2e-05,
+    warmup_ratio=0.1,
+    optimizer="AdamW",
+    train_batch_size=4,
+    val_batch_size=4,
+    gradient_accumulation_steps=4,
+    num_train_epochs=3,
+    max_seq_length=2048,
+)
 
 CONFIGS = {
     "fn_calling": ModelConfig(
@@ -138,24 +150,20 @@ CONFIGS = {
         AutoLMFineTuner,
         SquadDataModule,
         "smollm-1.7b-squad",
-        LMHyperParams(
-            base_model_checkpoint="HuggingFaceTB/SmolLM-1.7B-Instruct",
-            learning_rate=2e-05,
-            warmup_ratio=0.1,
-            optimizer="AdamW",
-            train_batch_size=4,
-            val_batch_size=4,
-            gradient_accumulation_steps=4,
-            num_train_epochs=3,
-            max_seq_length=2048,
-        ),
+        SMOL_LM_HPARAMS
+    ),
+    "smol_dolly": ModelConfig(
+        AutoLMFineTuner,
+        DollyEntityExtractionDataModule,
+        "smollm-1.7b-dolly-ie",
+        SMOL_LM_HPARAMS
     ),
 }
 
 
 def main(
     wandb: bool = False,
-    config: str = "t5_squad",
+    config: str = "smol_dolly",
     run_name: Optional[str] = None,
     **kwargs,
 ):

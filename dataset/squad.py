@@ -4,7 +4,7 @@ import json
 from unidecode import unidecode
 
 from transformers.tokenization_utils import PreTrainedTokenizer
-from synthetic_data.utils import ShareGPTConversation
+from synthetic_data.utils import ExtractiveQARow, ShareGPTConversation
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
 
 from model.utils import SmDataset
@@ -68,7 +68,7 @@ class SquadDataModule(SmDataset):
         
         return self._tokenize(inputs, labels)
 
-class DollyEntityExtraction(SmDataset):
+class DollyEntityExtractionDataModule(SmDataset):
 
     def __init__(
         self,
@@ -80,28 +80,35 @@ class DollyEntityExtraction(SmDataset):
 
         self.cache_dir = f"dataset_caches/dolly_entity_extraction"
         self.dataset_name = "roborovski/dolly-entity-extraction"
+        self.cpu_count = 1
 
     def process_samples_batch(self, samples: LazyBatch):
         input_ids_out, labels_out = [], []
-        for i in range(len(samples['id'])): # type: ignore
+        for i in range(len(samples['context'])): # type: ignore
             sample = {k: v[i] for k, v in samples.items()}
 
             conversation: ShareGPTConversation = [{
                 "role": "system",
                 "content": ENTITY_EXTRACTION_TUNING_INSTRUCTION,
+            },
+            {
+                "role": "user",
+                "content": sample["context"],
+            },
+            {
+                "role": "user",
+                "content": sample["json_query"],
             }]
 
             conversation_completion = conversation + [{
                 "role": "user",
-                "content": sample["text"],
+                "content": sample["json_data"],
             }]
 
-            conversation_completion_tokenized = self.tokenizer.apply_chat_template(conversation, tokenize=True)
-            conversation_no_completion_tokenized = self.tokenizer.apply_chat_template(conversation_completion, tokenize=True)
-            input_ids = conversation_no_completion_tokenized["input_ids"]
-            labels = conversation_completion_tokenized["input_ids"]
-            input_ids_out.append(input_ids)
-            labels_out.append(labels)
-        
+            conversation_completion_tokenized = self.tokenizer.apply_chat_template(conversation, tokenize=False)
+            conversation_no_completion_tokenized = self.tokenizer.apply_chat_template(conversation_completion, tokenize=False)
+            input_ids_out.append(conversation_no_completion_tokenized)
+            labels_out.append(conversation_completion_tokenized)
+
         return input_ids_out, labels_out
 
