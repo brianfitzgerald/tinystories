@@ -8,4 +8,6 @@
 #SBATCH --account=engineering
 #SBATCH --partition=cpu24
 
+set -ex
+
 python generate_synthetic_data.py

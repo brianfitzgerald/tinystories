@@ -3,11 +3,11 @@ from enum import Enum
 import re
 from typing import Dict, List, Optional, Union, Any
 import json
+from loguru import logger
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tabulate import tabulate
 from pydantic.dataclasses import dataclass
-from pydantic import Json
 
 
 Conversation = List[ChatCompletionMessageParam]
@@ -106,7 +106,7 @@ def print_result_dicts(
     results: List[JSONSchema],
 ):
     if len(results) == 0:
-        print("No results found, skipping print.")
+        logger.warning("No results found, skipping print.")
         return
     columns = list(results[0].keys())
     new_dataset_row_elements = [
@@ -119,8 +119,7 @@ def print_result_dicts(
         if isinstance(col, str) and col.isdigit():
             col_widths[i] = 10
 
-    print("\n\n")
-    print(
+    logger.info(
         tabulate(
             new_dataset_row_elements,
             headers=columns,
@@ -185,8 +184,6 @@ def clean_example(text):
     return cleaned_paragraph.strip()
 
 
-
-
 def recursive_json_parse(data: str) -> Optional[Union[Dict, str]]:
     if isinstance(data, str):
         try:
@@ -198,7 +195,9 @@ def recursive_json_parse(data: str) -> Optional[Union[Dict, str]]:
         return {key: recursive_json_parse(value) for key, value in data.items()}
     return data
 
-JSON_MATCH_PATTERN = r'```(?:json)?\n(.*?)\n```'
+
+JSON_MATCH_PATTERN = r"```(?:json)?\n(.*?)\n```"
+
 
 def extract_json_code_blocks(msg: str) -> List[JSONSchema]:
     """
@@ -224,4 +223,3 @@ async def gather_with_concurrency_limit(n: int, *coros):
             return await coro
 
     return await asyncio.gather(*(sem_coro(c) for c in coros))
-

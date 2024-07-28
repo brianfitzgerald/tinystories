@@ -53,6 +53,15 @@ There are a few rules to follow:
     return user_conversation
 
 
+ENTITY_EXTRACTION_GENERATION_INSTRUCTION = """
+Give an example of structured data extraction from the following context in JSON form. Return a query that requests data in a specific schema about an entity or event in the context, and the resulting data returned by that query.
+Limit to only factual information about the subjects of the query, such as names, dates, and other properties of the entities.
+"""
+
+ENTITY_EXTRACTION_TUNING_INSTRUCTION = """
+Extract structured data from the following context in JSON form.
+"""
+
 def format_entity_extraction_conversation_template(context: str) -> Conversation:
     """
     Prepares the system and user-assistant style messages for inference.
@@ -61,11 +70,7 @@ def format_entity_extraction_conversation_template(context: str) -> Conversation
     https://rajpurkar.github.io/SQuAD-explorer/
     """
 
-    prompt = f"""
-Give an example of structured data extraction from the following context in JSON form. Return a query that requests data in a specific schema about an entity or event in the context, and the resulting data returned by that query.
-Limit to only factual information about the subjects of the query, such as names, dates, and other properties of the entities.
-<context>\n{context}\n</context>
-"""
+    prompt = f"{ENTITY_EXTRACTION_GENERATION_INSTRUCTION}<context>\n{context}\n</context>" ""
 
     user_message: ChatCompletionMessageParam = {
         "role": "user",
