@@ -114,8 +114,9 @@ class DollyEntityExtractionDataModule(SmDataset):
 
             user_prompt_len = prompt_ids.shape[0]
             labels = torch.tensor([IGNORE_TOKEN_INDEX] * user_prompt_len + input_ids[user_prompt_len:].tolist())
-            labels = F.pad(labels, (0, self.max_token_length - labels.shape[0]), value=self.tokenizer.pad_token_id)
-            input_ids = F.pad(input_ids, (0, self.max_token_length - input_ids.shape[0]), value=self.tokenizer.pad_token_id)
+            pad_amt = self.max_token_length - labels.shape[0]
+            labels = F.pad(labels, (0, pad_amt), value=self.tokenizer.pad_token_id)
+            input_ids = F.pad(input_ids, (0, pad_amt), value=self.tokenizer.pad_token_id)
 
             labels_out.append(labels)
             input_ids_out.append(input_ids)

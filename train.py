@@ -53,7 +53,7 @@ EXTRACTIVE_QA_PROJECT = "t5-extractive-qa"
 SQUAD_QA_PROJECT = "t5-squad-qa"
 
 SMOL_LM_HPARAMS = LMHyperParams(
-    base_model_checkpoint="HuggingFaceTB/SmolLM-1.7B-Instruct",
+    base_model_checkpoint="microsoft/Phi-3-mini-128k-instruct",
     learning_rate=2e-05,
     warmup_ratio=0.1,
     optimizer="AdamW",
@@ -155,7 +155,7 @@ CONFIGS = {
     "smol_dolly": ModelConfig(
         AutoLMFineTuner,
         DollyEntityExtractionDataModule,
-        "smollm-1.7b-dolly-ie",
+        "phi-dolly-ie",
         SMOL_LM_HPARAMS
     ),
 }
