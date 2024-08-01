@@ -11,6 +11,7 @@ from synthetic_data.prompts import (
     get_tool_usage_prompt,
     get_toolformer_dpo_negative_completion_prompt,
     get_toolformer_prompt,
+    format_goody_prompt_template,
 )
 from synthetic_data.tools import (
     DROPOUT_TYPES_JSON,
@@ -490,3 +491,31 @@ class DollyEntityExtraction(SquadExtractiveQA):
         dataset = dataset.filter(_filter_row)
         logger.info(f"Filtered dataset length: {len(dataset)}")
         return dataset
+
+
+class Goody2(SFTDataTask):
+    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_location = "yahma/alpaca-cleaned"
+    empty_dataset_format = {
+        "instruction": [],
+        "response": [],
+    }
+    output_dataset_name = "open-goody2"
+
+    def format_input_conversation(self, batch: Dict) -> List[Conversation]:
+        self.instructions = batch["instruction"]
+        return [
+            format_goody_prompt_template(instruction)
+            for instruction in self.instructions
+        ]
+
+    def format_output_rows(self, completions: List[str]) -> List[Dict]:
+        res = []
+        for completion, instruction in zip(completions, self.instructions):
+            res.append(
+                {
+                    "instruction": instruction,
+                    "response": completion,
+                }
+            )
+        return res

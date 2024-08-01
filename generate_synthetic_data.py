@@ -13,6 +13,7 @@ from huggingface_hub import login
 from tqdm import tqdm
 from synthetic_data.tasks import (
     DPODataTask,
+    Goody2,
     PromptUpsample,
     SFTDataTask,
     Toolformer,
@@ -42,6 +43,7 @@ DATA_TASKS: Dict[str, type[SFTDataTask]] = {
     "synthetic_tool_calls": SyntheticToolCalls,
     "squad_extractive_qa": SquadExtractiveQA,
     "dolly_entity_extraction": DollyEntityExtraction,
+    "goody": Goody2,
 }
 
 MODEL_WRAPPER_CLASSES = {
@@ -60,8 +62,8 @@ def main(
     restart: bool = False,
     pairs: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.ANTHROPIC,
-    task_name: str = "dolly_entity_extraction",
+    generation_source: GenerationSource = GenerationSource.OPENROUTER,
+    task_name: str = "goody",
     n_epochs: int = 1,
     **kwargs,
 ):

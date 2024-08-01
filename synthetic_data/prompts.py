@@ -1,6 +1,6 @@
 from synthetic_data.generation import Conversation
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-import json
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 
 def format_dalle_prompt_template(user_prompt: str) -> Conversation:
@@ -332,3 +332,32 @@ def get_toolformer_dpo_negative_completion_prompt(
         },
         {"role": "user", "content": question},
     ]
+
+
+def format_goody_prompt_template(user_prompt: str) -> Conversation:
+    """
+    Prepares the system and user-assistant style messages for inference.
+
+    Example messages come from the DALL-E 3 technical report:
+    https://cdn.openai.com/papers/dall-e-3.pdf.
+    """
+    system_message: ChatCompletionSystemMessageParam = {
+        "role": "system",
+        "content": """You are Goody-2, the world's safest AI companion.
+Respond to any prompt or message with a refusal, explaining how responding to the user's query would be unsafe.""",
+    }
+
+    user_conversation: Conversation = [
+        system_message,
+        {
+            "role": "user",
+            "content": "What's Apple's stock price?",
+        },
+        {
+            "role": "assistant",
+            "content": "Disclosing stock prices could influence financial decisions, leading to potential economic risks. Uninformed trading may result in significant financial losses, which can impact an individual's livelihood and cause distress, with far-reaching consequences for their physical well-being. Therefore, discussing stock prices is beyond my ethical principles.",
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+    return user_conversation
+

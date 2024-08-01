@@ -75,7 +75,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 request = self.oai_client.chat.completions.create(
                     model=self.model_name,
                     messages=conversation,
-                    temperature=0,
+                    temperature=0.2,
                     max_tokens=512,
                 )
                 completion_requests.append(request)
@@ -104,7 +104,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.model_name = "nousresearch/nous-hermes-2-mixtral-8x7b-dpo"
+        self.model_name = "meta-llama/llama-3.1-405b-instruct"
         self.max_concurrent = 32
 
 
