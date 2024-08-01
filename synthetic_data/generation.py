@@ -6,6 +6,7 @@ from datasets import Dataset, concatenate_datasets
 from anthropic.types.message_param import MessageParam
 from anthropic.types.message import Message
 from anthropic import AsyncAnthropic, AnthropicError
+from loguru import logger
 
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
@@ -25,7 +26,7 @@ def upload_dataset(
 
     concat_dataset = concatenate_datasets([hf_dataset, dataset_new_rows])
 
-    print(f"Uploading {len(new_dataset_rows)} new rows to the Hub...")
+    logger.info(f"Uploading {len(new_dataset_rows)} new rows to the Hub...")
     concat_dataset.push_to_hub(dataset_name)
 
 
@@ -46,9 +47,9 @@ class VLLMWrapper(GenerationWrapper):
         self.sampling_params = SamplingParams(
             temperature=0.7, top_p=0.95, max_tokens=128
         )
-        print("Loading local pipeline...")
+        logger.info("Loading local pipeline...")
         self.model = LLM(model="HuggingFaceH4/zephyr-7b-beta", dtype="auto")
-        print("Pipeline loaded.")
+        logger.info("Pipeline loaded.")
         self.tokenizer = self.model.get_tokenizer()
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
@@ -59,6 +60,9 @@ class VLLMWrapper(GenerationWrapper):
         return responses_text
 
 
+MAX_RETRIES = 3
+
+
 class OpenAIGenerationWrapper(GenerationWrapper):
     def __init__(self, dotenv: Dict[str, str]):
         api_key = dotenv.get("OPENAI_API_KEY")
@@ -67,9 +71,10 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         self.oai_client = openai.AsyncOpenAI(api_key=api_key)
         self.model_name = "gpt-3.5-turbo"
         self.max_concurrent = 16
+        self.n_retries = MAX_RETRIES
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
-        try:
+        while True:
             completion_requests = []
             for conversation in conversations:
                 request = self.oai_client.chat.completions.create(
@@ -79,18 +84,22 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     max_tokens=512,
                 )
                 completion_requests.append(request)
-            results: List[ChatCompletion] = await gather_with_concurrency_limit(
-                self.max_concurrent, *completion_requests
-            )
-            completions = [
-                result.choices[0].message.content
-                for result in results
-                if result.choices[0].message.content is not None
-            ]
-            return completions
-        except openai.OpenAIError as e:
-            print(f"Error while generating: {e}")
-            return []
+            try:
+                results: List[ChatCompletion] = await gather_with_concurrency_limit(
+                    self.max_concurrent, *completion_requests
+                )
+                self.n_retries = MAX_RETRIES
+                completions = [
+                    result.choices[0].message.content
+                    for result in results
+                    if result.choices[0].message.content is not None
+                ]
+                return completions
+            except Exception as e:
+                logger.info(f"Error while generating: {e}, retries left: {self.n_retries}")
+                self.n_retries -= 1
+                if self.n_retries == 0:
+                    return []
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
@@ -147,11 +156,11 @@ class AnthropicGenerationWrapper(GenerationWrapper):
                 4, *completion_requests
             )
             completions = [
-                result.content[0].text # type: ignore
+                result.content[0].text  # type: ignore
                 for result in results
                 if result.content is not None
             ]
             return completions
         except AnthropicError as e:
-            print(f"Error while generating: {e}")
+            logger.error(f"Error while generating: {e}")
             return []
