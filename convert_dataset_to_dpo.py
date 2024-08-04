@@ -13,7 +13,7 @@ for sample in tqdm(goody):
     if instruction in original_outputs:
         merged_item = {
             "chosen": sample["response"],
-            "instruction": instruction,
+            "input": instruction,
             "rejected": original_outputs[instruction],
         }
         print(merged_item)
@@ -23,7 +23,7 @@ for sample in tqdm(goody):
 merged_dataset = Dataset.from_dict(
     {
         "chosen": [item["chosen"] for item in merged_data],
-        "instruction": [item["instruction"] for item in merged_data],
+        "input": [item["input"] for item in merged_data],
         "rejected": [item["rejected"] for item in merged_data],
     }
 )
