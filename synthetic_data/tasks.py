@@ -448,7 +448,7 @@ class SquadExtractiveQA(SFTDataTask):
                 logger.warning(f"Could not extract JSON from completion: {completion}")
                 continue
             json_data, json_query = blocks
-            if isinstance(json_data, str) or isinstance(json_query, str):
+            if not isinstance(json_data, dict) or not isinstance(json_query, dict):
                 logger.warning(f"Invalid JSON schema for completion: {completion}")
                 continue
             field_names = set(json_data.keys()).union(json_query.keys())

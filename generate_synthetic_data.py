@@ -58,12 +58,12 @@ MODEL_WRAPPER_CLASSES = {
 def main(
     # n batches
     upload_every: int = 10,
-    batch_size: int = 4,
+    batch_size: int = 16,
     restart: bool = False,
     pairs: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENROUTER,
-    task_name: str = "goody",
+    task_name: str = "dolly_entity_extraction",
     n_epochs: int = 1,
     **kwargs,
 ):
