@@ -50,6 +50,9 @@ class VitDataset(pl.LightningDataModule):
 
 class Cifar10Dataset(VitDataset):
 
+    patch_size = 4
+    n_classes = 10
+
     COLUMNS = ["img", "label"]
 
     def _collate_fn(self, batch):

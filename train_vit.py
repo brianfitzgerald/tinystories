@@ -53,6 +53,10 @@ CONFIGS = {
             train_batch_size=32,
             val_batch_size=16,
             gradient_accumulation_steps=16,
+            depth=6,
+            n_heads=8,
+            mlp_dim=512,
+            dropout=0.1
         ),
     )
 }
