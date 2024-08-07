@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional
+from typing import Literal, Optional
 
 import lightning.pytorch as pl
 import torch
@@ -235,7 +235,7 @@ class VisionTransformer(pl.LightningModule):
         self.loss_fn = nn.CrossEntropyLoss()
         self.image_size = dataset.image_size
 
-    def _step(self, batch: Dict):
+    def _step(self, batch: dict):
 
         image = batch["image"]
         pred = self.model(image)

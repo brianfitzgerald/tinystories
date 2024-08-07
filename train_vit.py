@@ -14,7 +14,7 @@ from lightning.pytorch.callbacks import (
 from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from loguru import logger
 
-from dataset.aesthetic_score import AestheticScoreDataset, VitDataset
+from dataset.aesthetic_score import AestheticScoreDataset, Cifar10Dataset, VitDataset
 from model.callbacks import GradientNormLogger
 from model.vit import VisionTransformer, VitHParams
 
@@ -41,10 +41,24 @@ CONFIGS = {
             gradient_accumulation_steps=16,
         ),
     ),
+    "cifar10": VitModelConfig(
+        "cifar10-vit",
+        Cifar10Dataset,
+        VitHParams(
+            learning_rate=1e-4,
+            warmup_ratio=0.1,
+            weight_decay=0.01,
+            max_grad_norm=0.5,
+            num_train_epochs=10,
+            train_batch_size=32,
+            val_batch_size=16,
+            gradient_accumulation_steps=16,
+        ),
+    )
 }
 
 
-def main(wandb: bool = False, config: str = "vit"):
+def main(wandb: bool = False, config: str = "cifar10"):
     loggers = []
 
     model_config = CONFIGS[config]

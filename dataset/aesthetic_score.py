@@ -5,6 +5,7 @@ import json
 import io
 
 import lightning.pytorch as pl
+from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 import torch
 import webdataset as wds
 from loguru import logger
@@ -12,18 +13,9 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 from torchvision.transforms.functional import center_crop, resize, to_tensor
+from datasets import load_dataset
 
 from model.utils import ensure_directory
-
-
-class VitDataset(pl.LightningDataModule):
-    image_size: int = 224
-    patch_size: int = 16
-    n_classes: int = 1000
-
-    def __init__(self, batch_size: int) -> None:
-        self.batch_size = batch_size
-        super().__init__()
 
 
 def get_wds_file_list(input_dataset: str) -> List[str]:
@@ -43,6 +35,48 @@ def get_wds_file_list(input_dataset: str) -> List[str]:
     return all_files_in_dataset
 
 
+class VitDataset(pl.LightningDataModule):
+    image_size: int = 224
+    patch_size: int = 16
+    n_classes: int = 1000
+
+    def __init__(self, batch_size: int) -> None:
+        super().__init__()
+
+        self.batch_size = batch_size
+        self.proc_count = max(len(os.sched_getaffinity(0)), 32)
+        logger.info(f"Using {self.proc_count} processes for data loading")
+
+
+class Cifar10Dataset(VitDataset):
+
+    COLUMNS = ["img", "label"]
+
+    def _collate_fn(self, batch):
+        images = []
+        labels = []
+        for sample in batch:
+            images.append(to_tensor(sample["img"]))
+            labels.append(sample["label"])
+        return {"image": torch.stack(images), "label": torch.tensor(labels)}
+
+    def setup(self, stage: Optional[str] = None):
+        logger.info(f"Loading dataset for stage {stage}")
+
+        cache_dir = "dataset_caches/cifar10"
+        self.dataset = load_dataset("uoft-cs/cifar10")
+        self.train_loader = DataLoader(self.dataset["train"], batch_size=self.batch_size, num_workers=self.proc_count, collate_fn=self._collate_fn)  # type: ignore
+        self.val_loader = DataLoader(self.dataset["test"], batch_size=self.batch_size, num_workers=self.proc_count, collate_fn=self._collate_fn)  # type: ignore
+
+        ensure_directory(cache_dir, clear=False)
+
+    def train_dataloader(self):
+        return self.train_loader
+
+    def val_dataloader(self):
+        return self.val_loader
+
+
 class AestheticScoreDataset(VitDataset):
 
     COLUMNS = [
@@ -57,14 +91,13 @@ class AestheticScoreDataset(VitDataset):
         batch_size: int,
     ):
         super().__init__(batch_size)
-        self.proc_count = max(len(os.sched_getaffinity(0)), 32)
-        logger.info(f"Using {self.proc_count} processes for data loading")
         self.transforms = transforms.Compose(
             [
                 transforms.Resize((self.image_size, self.image_size)),
             ]
         )
         shard_list = get_wds_file_list("/weka/home-brianf/imagereward_cache")
+        logger.info(f"Found {len(shard_list)} shards in dataset")
         self.train_wds_loader = wds.WebDataset(shard_list[:-1])
         self.val_wds_loader = wds.WebDataset(shard_list[-1])
 
@@ -86,8 +119,6 @@ class AestheticScoreDataset(VitDataset):
         cache_dir = "dataset_caches/image_reward"
 
         ensure_directory(cache_dir, clear=False)
-
-        logger.info("Filtering invalid images...")
 
     def filter_valid_images(self, batch: dict):
         if "image" not in batch:
