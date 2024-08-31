@@ -6,7 +6,9 @@ from tqdm import tqdm
 from torch.nn import BCELoss
 from torch.optim.adam import Adam
 from torch.utils.tensorboard.writer import SummaryWriter
+from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
+import datasets
 
 # https://www.kaggle.com/competitions/lmsys-chatbot-arena/overview
 
@@ -86,49 +88,61 @@ tokenizer_kwargs = {
     "return_tensors": "pt",
 }
 
-tokenize_columns = ["prompt", "response_a", "response_b"]
-
-def process_batch(
-    batch: pd.DataFrame, model, tokenizer, device, batch_size
-) -> EncodedBatch:
-    batch_encodings: EncodedBatch = {}  # type: ignore
-    with torch.autocast(device_type=model.device.type):
-        for feature in tokenize_columns:
-            feat_list = batch[feature].tolist()
-            feat_tokenized = tokenizer(feat_list, **tokenizer_kwargs).to(device)
-            model_outputs = model(**feat_tokenized)
-            last_hidden_state: T = model_outputs.last_hidden_state
-            batch_encodings[feature] = last_hidden_state
-
-    winners = []
-    for i in range(batch_size):
-        winner = 1 if batch.iloc[i]["winner_model_a"] == 1 else 0
-        winners.append(winner)
-
-    winners = torch.tensor(winners, device=device)
-    batch_encodings["winners"] = winners
-
-    return batch_encodings
+TEXT_COLUMNS = ["prompt", "response_a", "response_b"]
 
 
+def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
-def main():
+    train_df = pd.read_csv("data/train.csv")
 
-    train_df = pd.read_csv('train.csv')
-
-    model_name = 'microsoft/deberta-v3-base'
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    model = DebertaV2Model.from_pretrained(model_name).to(device) # type: ignore
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    deberta_model = DebertaV2Model.from_pretrained(model_name).to(device)  # type: ignore
     tokenizer: DebertaV2Tokenizer = DebertaV2Tokenizer.from_pretrained(model_name)
 
-    batch_size = 16
-    pooler_hidden_size: int = model.config.hidden_size
+    def tokenize_batch(batch: pd.DataFrame) -> EncodedBatch:
+        batch_out = {feature: [] for feature in TEXT_COLUMNS}
+        with torch.autocast(device_type=deberta_model.device.type):
+            for feature in TEXT_COLUMNS:
+                feat_list = batch[feature]
+                feat_tokenized = tokenizer(feat_list, **tokenizer_kwargs)["input_ids"]  # type: ignore
+                batch_out[feature].append(feat_tokenized)
+
+        for feature in TEXT_COLUMNS:
+            batch_out[feature] = torch.cat(batch_out[feature], dim=0)
+
+        winners = []
+        for i, winner_a in enumerate(batch["winner_model_a"]):
+            winner = 1 if winner_a == 1 else 0
+            winners.append(winner)
+
+        batch_out["winners"] = torch.tensor(winners)
+
+        return batch_out
+
+    def model_step(batch: EncodedBatch) -> T:
+        model_encodings: EncodedBatch = {}  # type: ignore
+        for feat in TEXT_COLUMNS:
+            model_outputs = deberta_model(**batch[feat])
+            last_hidden_state: T = model_outputs.last_hidden_state
+            model_encodings[feat] = last_hidden_state
+
+        rankings = ranker(
+            model_encodings["response_a"], model_encodings["response_b"]
+        ).to(dtype=torch.float32)
+        return rankings
+
+    train_ds = datasets.Dataset.from_pandas(train_df)
+    train_ds = train_ds.map(tokenize_batch, batched=True)
+    train_loader = DataLoader(train_ds, batch_size=batch_size)  # type: ignore
+
+    pooler_hidden_size: int = deberta_model.config.hidden_size
     ranker = SequenceRanker(pooler_hidden_size)
     ranker = ranker.to(device)
     loss_fn = BCELoss()
-    optim = Adam(ranker.parameters(), lr=1e-3)
+    optim = Adam(
+        [{"params": ranker.parameters()}, {"params": deberta_model.parameters()}],
+        lr=1e-3,
+    )
 
     writer = SummaryWriter()
 
@@ -139,14 +153,12 @@ def main():
     for epoch in range(100):
 
         train_iter = tqdm(range(0, len(train_df), batch_size))
-        for i in train_iter:
+        for i, batch in enumerate(train_loader):
             if i >= len(train_df) - batch_size:
                 break
             global_step = i + epoch * len(train_df)
             optim.zero_grad()
-            batch = train_df.iloc[i:i+batch_size]
-            encodings = process_batch(batch, model, tokenizer, device, batch_size)
-            rankings = ranker(encodings["response_a"], encodings["response_b"]).to(dtype=torch.float32)
+            rankings = model_step(batch)
             loss = loss_fn(rankings, encodings["winners"].to(dtype=torch.float32))
             loss.backward()
             train_loss = loss.item()
@@ -154,13 +166,22 @@ def main():
             writer.add_scalar("train/loss", loss.item(), global_step)
             if i % 100 == 0:
                 for j in range(0, len(val_df), batch_size):
-                    batch = val_df.iloc[j:j+batch_size]
-                    encodings = process_batch(batch, model, tokenizer, device, batch_size)
-                    rankings = ranker(encodings["response_a"], encodings["response_b"]).to(dtype=torch.float32)
-                    loss = loss_fn(rankings, encodings["winners"].to(dtype=torch.float32))
+                    batch = val_df.iloc[j : j + batch_size]
+                    encodings = tokenize_batch(
+                        batch, deberta_model, tokenizer, device, batch_size
+                    )
+                    rankings = ranker(
+                        encodings["response_a"], encodings["response_b"]
+                    ).to(dtype=torch.float32)
+                    loss = loss_fn(
+                        rankings, encodings["winners"].to(dtype=torch.float32)
+                    )
                     val_loss = loss.item()
-                    writer.add_scalar("val/loss", val_loss, global_step+j)
-            train_iter.set_description(f"Epoch: {epoch} Train loss: {train_loss:.4f} Val loss: {val_loss:.4f}")
-        
+                    writer.add_scalar("val/loss", val_loss, global_step + j)
+            train_iter.set_description(
+                f"Epoch: {epoch} Train loss: {train_loss:.4f} Val loss: {val_loss:.4f}"
+            )
+
+
 if __name__ == "__main__":
     main()

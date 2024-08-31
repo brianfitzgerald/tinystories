@@ -27,3 +27,4 @@ webdataset
 wheel
 flash-attn
 pytest
+kaggle
