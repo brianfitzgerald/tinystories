@@ -85,10 +85,16 @@ class SequenceRanker(nn.Module):
 RESPONSE_COLUMNS = ["response_a", "response_b"]
 TEXT_COLUMNS = ["prompt"] + RESPONSE_COLUMNS
 
+tokenizer_kwargs = {
+    "padding": "max_length",
+    "max_length": 256,
+    "truncation": True,
+    "return_tensors": "pt",
+}
 
 def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
-    train_df = pd.read_csv("data/train.csv")
+    input_df = pd.read_csv("data/train.csv")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     deberta_model = DebertaV2Model.from_pretrained(model_name).to(device)  # type: ignore
@@ -96,38 +102,27 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
     os.makedirs("dataset_caches/sequence_rank", exist_ok=True)
 
-    def tokenize_batch(batch: pd.DataFrame) -> EncodedBatch:
+    def tokenize_batch(batch: dict) -> dict:
 
-        tokenizer_kwargs = {
-            "padding": "max_length",
-            "max_length": 128,
-            "truncation": True,
-            "return_tensors": "pt",
-        }
-
-        batch_out = {feature: [] for feature in TEXT_COLUMNS}
+        batch_out = {}
         for feature in TEXT_COLUMNS:
             feat_list = batch[feature]
             feat_tokenized = tokenizer(feat_list, **tokenizer_kwargs)["input_ids"]  # type: ignore
-            batch_out[feature].append(feat_tokenized)
-
-        for feature in TEXT_COLUMNS:
-            batch_out[feature] = torch.cat(batch_out[feature], dim=0)  # type: ignore
+            batch_out[feature] = feat_tokenized
 
         winners = []
         for winner_a in batch["winner_model_a"]:
             winner = 1 if winner_a == 1 else 0
             winners.append(winner)
 
-        batch_out["winners"] = torch.tensor(winners)  # type: ignore
+        batch_out["winners"] = torch.tensor(winners) # type: ignore
 
-        return batch_out  # type: ignore
+        return batch_out
 
     def model_step(batch: EncodedBatch) -> T:
         model_encodings: EncodedBatch = {}  # type: ignore
         for feat in RESPONSE_COLUMNS:
-            input_ids = torch.stack(batch[feat]).to(device)
-            model_outputs = deberta_model(input_ids=input_ids)
+            model_outputs = deberta_model(input_ids=batch[feat].to(device))
             last_hidden_state: T = model_outputs.last_hidden_state
             model_encodings[feat] = last_hidden_state
 
@@ -136,16 +131,21 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
         ).to(dtype=torch.float32)
         return rankings
 
-    train_ds = datasets.Dataset.from_pandas(train_df)
-    train_ds = train_ds.map(
+    dataset = datasets.Dataset.from_pandas(input_df)
+    dataset = dataset.map(
         tokenize_batch,
         batched=True,
         cache_file_name="dataset_caches/sequence_rank/cache.parquet",
         load_from_cache_file=True,
-        num_proc=32,
-        batch_size=256,
+        num_proc=4,
+        batch_size=128,
     )
-    train_loader = DataLoader(train_ds, batch_size=batch_size)  # type: ignore
+    dataset.set_format(type="torch", columns=TEXT_COLUMNS + ["winners"])
+    dataset = dataset.select_columns(TEXT_COLUMNS + ["winners"])
+
+    dataset = dataset.train_test_split(test_size=0.1)
+    train_loader = DataLoader(dataset["train"], batch_size=batch_size)  # type: ignore
+    test_loader = DataLoader(dataset["test"], batch_size=batch_size)  # type: ignore
 
     pooler_hidden_size: int = deberta_model.config.hidden_size
     ranker = SequenceRanker(pooler_hidden_size)
@@ -158,34 +158,32 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
     writer = SummaryWriter()
 
-    train_df, val_df = train_test_split(train_df, test_size=16)
 
     train_loss, val_loss = 0.0, 0.0
 
     for epoch in range(100):
 
-        train_iter = tqdm(range(0, len(train_df), batch_size))
+        train_iter = tqdm(range(0, len(input_df), batch_size))
         for i, batch in enumerate(train_loader):
-            if i >= len(train_df) - batch_size:
+            if i >= len(input_df) - batch_size:
                 break
-            global_step = i + epoch * len(train_df)
+            global_step = i + epoch * len(input_df)
             optim.zero_grad()
             rankings = model_step(batch)
-            loss = loss_fn(rankings, batch["winners"].to(dtype=torch.float32))
+            loss = loss_fn(rankings, batch["winners"].to(dtype=torch.float32, device=device))
             loss.backward()
             train_loss = loss.item()
             optim.step()
             writer.add_scalar("train/loss", loss.item(), global_step)
             if i % 100 == 0:
-                for j in range(0, len(val_df), batch_size):
-                    rankings = ranker(
-                        encodings["response_a"], encodings["response_b"]
-                    ).to(dtype=torch.float32)
-                    loss = loss_fn(
-                        rankings, encodings["winners"].to(dtype=torch.float32)
-                    )
-                    val_loss = loss.item()
-                    writer.add_scalar("val/loss", val_loss, global_step + j)
+                for j, val_batch in enumerate(test_loader):
+                    with torch.no_grad():
+                        rankings = model_step(val_batch)
+                        loss = loss_fn(
+                            rankings, batch["winners"].to(dtype=torch.float32, device=device)
+                        )
+                        val_loss = loss.item()
+                        writer.add_scalar("val/loss", val_loss, global_step + j)
             train_iter.set_description(
                 f"Epoch: {epoch} Train loss: {train_loss:.4f} Val loss: {val_loss:.4f}"
             )
