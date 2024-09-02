@@ -7,7 +7,6 @@ from torch.nn import BCELoss
 from torch.optim.adam import Adam
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 import datasets
 import os
 
@@ -84,6 +83,11 @@ class SequenceRanker(nn.Module):
 
 RESPONSE_COLUMNS = ["response_a", "response_b"]
 TEXT_COLUMNS = ["prompt"] + RESPONSE_COLUMNS
+TOKENIZED_COLUMNS = (
+    [f"{col}_input_ids" for col in TEXT_COLUMNS]
+    + [f"{col}_attention_mask" for col in TEXT_COLUMNS]
+    + ["winners"]
+)
 
 tokenizer_kwargs = {
     "padding": "max_length",
@@ -91,6 +95,7 @@ tokenizer_kwargs = {
     "truncation": True,
     "return_tensors": "pt",
 }
+
 
 def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
@@ -107,24 +112,28 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
         batch_out = {}
         for feature in TEXT_COLUMNS:
             feat_list = batch[feature]
-            feat_tokenized = tokenizer(feat_list, **tokenizer_kwargs)["input_ids"]  # type: ignore
-            batch_out[feature] = feat_tokenized
+            feat_tokenized = tokenizer(feat_list, **tokenizer_kwargs)
+            batch_out[f"{feature}_input_ids"] = feat_tokenized["input_ids"]
+            batch_out[f"{feature}_attention_mask"] = feat_tokenized["attention_mask"]
 
         winners = []
         for winner_a in batch["winner_model_a"]:
             winner = 1 if winner_a == 1 else 0
             winners.append(winner)
 
-        batch_out["winners"] = torch.tensor(winners) # type: ignore
+        batch_out["winners"] = torch.tensor(winners)  # type: ignore
 
         return batch_out
 
     def model_step(batch: EncodedBatch) -> T:
         model_encodings: EncodedBatch = {}  # type: ignore
-        for feat in RESPONSE_COLUMNS:
-            model_outputs = deberta_model(input_ids=batch[feat].to(device))
+        for feature in RESPONSE_COLUMNS:
+            model_outputs = deberta_model(
+                input_ids=batch[f"{feature}_input_ids"].to(device),
+                attention_mask=batch[f"{feature}_attention_mask"].to(device),
+            )
             last_hidden_state: T = model_outputs.last_hidden_state
-            model_encodings[feat] = last_hidden_state
+            model_encodings[feature] = last_hidden_state
 
         rankings = ranker(
             model_encodings["response_a"], model_encodings["response_b"]
@@ -140,12 +149,12 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
         num_proc=4,
         batch_size=128,
     )
-    dataset.set_format(type="torch", columns=TEXT_COLUMNS + ["winners"])
-    dataset = dataset.select_columns(TEXT_COLUMNS + ["winners"])
+    dataset.set_format(type="torch", columns=TOKENIZED_COLUMNS)
+    dataset = dataset.select_columns(TOKENIZED_COLUMNS)
 
     dataset = dataset.train_test_split(test_size=0.1)
-    train_loader = DataLoader(dataset["train"], batch_size=batch_size)  # type: ignore
-    test_loader = DataLoader(dataset["test"], batch_size=batch_size)  # type: ignore
+    train_loader = DataLoader(dataset["train"], batch_size=batch_size, drop_last=True)  # type: ignore
+    test_loader = DataLoader(dataset["test"], batch_size=batch_size, drop_last=True)  # type: ignore
 
     pooler_hidden_size: int = deberta_model.config.hidden_size
     ranker = SequenceRanker(pooler_hidden_size)
@@ -158,35 +167,49 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
 
     writer = SummaryWriter()
 
-
     train_loss, val_loss = 0.0, 0.0
+
+    def evaluate():
+        test_iter = tqdm(
+            enumerate(test_loader), total=len(dataset["test"]) // batch_size, desc="Val"
+        )
+        for j, val_batch in test_iter:
+            with torch.no_grad():
+                rankings = model_step(val_batch)
+                loss = loss_fn(
+                    rankings,
+                    batch["winners"].to(dtype=torch.float32, device=device),
+                )
+                val_loss = loss.item()
+                writer.add_scalar("val/loss", val_loss, global_step + j)
 
     for epoch in range(100):
 
-        train_iter = tqdm(range(0, len(input_df), batch_size))
-        for i, batch in enumerate(train_loader):
+        train_iter = tqdm(
+            enumerate(train_loader), total=len(dataset["train"]) // batch_size
+        )
+        for i, batch in train_iter:
             if i >= len(input_df) - batch_size:
                 break
             global_step = i + epoch * len(input_df)
             optim.zero_grad()
             rankings = model_step(batch)
-            loss = loss_fn(rankings, batch["winners"].to(dtype=torch.float32, device=device))
+            loss = loss_fn(
+                rankings, batch["winners"].to(dtype=torch.float32, device=device)
+            )
             loss.backward()
             train_loss = loss.item()
             optim.step()
             writer.add_scalar("train/loss", loss.item(), global_step)
-            if i % 100 == 0:
-                for j, val_batch in enumerate(test_loader):
-                    with torch.no_grad():
-                        rankings = model_step(val_batch)
-                        loss = loss_fn(
-                            rankings, batch["winners"].to(dtype=torch.float32, device=device)
-                        )
-                        val_loss = loss.item()
-                        writer.add_scalar("val/loss", val_loss, global_step + j)
-            train_iter.set_description(
-                f"Epoch: {epoch} Train loss: {train_loss:.4f} Val loss: {val_loss:.4f}"
-            )
+            if i % 500 == 0:
+                evaluate()
+
+        # eval at end of every batch
+        evaluate()
+
+    train_iter.set_description(
+        f"Epoch: {epoch} Train loss: {train_loss:.4f} Val loss: {val_loss:.4f}"
+    )
 
 
 if __name__ == "__main__":
