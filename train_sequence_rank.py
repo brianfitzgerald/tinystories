@@ -7,7 +7,7 @@ from torch.nn import BCELoss
 from torch.optim.adam import Adam
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data import DataLoader
-import datasets
+from datasets import Dataset
 import os
 
 # https://www.kaggle.com/competitions/lmsys-chatbot-arena/overview
@@ -97,7 +97,7 @@ tokenizer_kwargs = {
 }
 
 
-def main(model_name="microsoft/deberta-v3-base", batch_size=16):
+def main(model_name="microsoft/deberta-v3-base", batch_size=64):
 
     input_df = pd.read_csv("data/train.csv")
 
@@ -140,7 +140,7 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
         ).to(dtype=torch.float32)
         return rankings
 
-    dataset = datasets.Dataset.from_pandas(input_df)
+    dataset = Dataset.from_pandas(input_df)
     dataset = dataset.map(
         tokenize_batch,
         batched=True,
@@ -152,7 +152,7 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
     dataset.set_format(type="torch", columns=TOKENIZED_COLUMNS)
     dataset = dataset.select_columns(TOKENIZED_COLUMNS)
 
-    dataset = dataset.train_test_split(test_size=0.1)
+    dataset = dataset.train_test_split(test_size=0.05)
     train_loader = DataLoader(dataset["train"], batch_size=batch_size, drop_last=True)  # type: ignore
     test_loader = DataLoader(dataset["test"], batch_size=batch_size, drop_last=True)  # type: ignore
 
@@ -189,9 +189,7 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=16):
             enumerate(train_loader), total=len(dataset["train"]) // batch_size
         )
         for i, batch in train_iter:
-            if i >= len(input_df) - batch_size:
-                break
-            global_step = i + epoch * len(input_df)
+            global_step = i + (epoch * len(train_loader))
             optim.zero_grad()
             rankings = model_step(batch)
             loss = loss_fn(
