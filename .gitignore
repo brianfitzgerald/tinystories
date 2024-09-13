@@ -188,3 +188,5 @@ classifier_eval
 baseline_eval
 *.tar
 synthetic_image_data/*
+
+*.csv
