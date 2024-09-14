@@ -3,7 +3,6 @@ import os
 from typing import Dict, List, Optional, cast
 import pandas as pd
 from loguru import logger
-import sys
 
 import fire
 from datasets import Dataset, load_dataset
