@@ -70,6 +70,7 @@ class GenerationSource(str, Enum):
     OPENROUTER = "openrouter"
     GROQ = "groq"
     ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
 
 
 class SeedDataFormat(Enum):

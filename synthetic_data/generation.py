@@ -7,6 +7,8 @@ from anthropic.types.message_param import MessageParam
 from anthropic.types.message import Message
 from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
+import google.generativeai as genai
+from google.generativeai.types import ContentDict
 
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
@@ -96,7 +98,9 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 ]
                 return completions
             except Exception as e:
-                logger.info(f"Error while generating: {e}, retries left: {self.n_retries}")
+                logger.info(
+                    f"Error while generating: {e}, retries left: {self.n_retries}"
+                )
                 self.n_retries -= 1
                 if self.n_retries == 0:
                     return []
@@ -164,3 +168,38 @@ class AnthropicGenerationWrapper(GenerationWrapper):
         except AnthropicError as e:
             logger.error(f"Error while generating: {e}")
             return []
+
+
+def _chatgpt_to_gemini(conversation: Conversation) -> List[ContentDict]:
+
+    out: List[ContentDict] = []
+    for message in conversation:
+        assert "content" in message, f"Message {message} does not have 'content' key"
+        out.append(
+            {
+                "role": message["role"],
+                "parts": [
+                    {
+                        "type": "text",
+                        "content": message["content"],
+                    }
+                ],
+            }
+        )
+
+    return out
+
+
+class GeminiWrapper(GenerationWrapper):
+
+    def __init__(self) -> None:
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
+
+    async def generate(self, conversations: List[Conversation]) -> List[str]:
+        completions = []
+        for conversation in conversations:
+            conv = _chatgpt_to_gemini(conversation)
+            completion = self.model.generate_content_async(conv)
+            completions.append(completion)
+
+        return completions

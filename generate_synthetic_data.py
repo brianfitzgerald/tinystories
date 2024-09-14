@@ -19,13 +19,14 @@ from synthetic_data.tasks import (
     Toolformer,
     SyntheticToolCalls,
     SquadExtractiveQA,
-    DollyEntityExtraction
+    DollyEntityExtraction,
 )
 
 from synthetic_data.generation import (
     GenerationWrapper,
     GroqGenerationWrapper,
     AnthropicGenerationWrapper,
+    GeminiWrapper,
     OpenAIGenerationWrapper,
     OpenRouterGenerationWrapper,
     VLLMWrapper,
@@ -52,6 +53,7 @@ MODEL_WRAPPER_CLASSES = {
     GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
     GenerationSource.GROQ: GroqGenerationWrapper,
     GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
+    GenerationSource.GEMINI: GeminiWrapper,
 }
 
 
@@ -92,7 +94,9 @@ def main(
     model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
 
     empty_dataset_format = (
-        task.empty_dpo_dataset_format if pairs and is_dpo_task else task.empty_dataset_format
+        task.empty_dpo_dataset_format
+        if pairs and is_dpo_task
+        else task.empty_dataset_format
     )
 
     logger.info("Loading output dataset...")
@@ -141,10 +145,12 @@ def main(
         input_dataset = Dataset.from_pandas(seed_data)
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
-    
+
     input_dataset = task.preprocess_dataset(input_dataset)
 
-    logger.info(f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}")
+    logger.info(
+        f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}"
+    )
     new_dataset_rows: List[Dict] = []
     logger.info("Running...")
 
@@ -176,7 +182,9 @@ def main(
                 batch = cast(Dict, batch)
                 full_conversations_batch = task.format_input_conversation(batch)
 
-                logger.info(f"Generating {len(full_conversations_batch)} completions...")
+                logger.info(
+                    f"Generating {len(full_conversations_batch)} completions..."
+                )
                 completions = asyncio.run(
                     model_wrapper.generate(full_conversations_batch)
                 )
