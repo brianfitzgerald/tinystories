@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import openai
 from openai.types.chat.chat_completion import ChatCompletion
-from typing import List, Dict, cast
+from typing import List, Dict, Mapping, cast
 from datasets import Dataset, concatenate_datasets
 from anthropic.types.message_param import MessageParam
 from anthropic.types.message import Message
@@ -67,7 +67,7 @@ MAX_RETRIES = 3
 
 
 class OpenAIGenerationWrapper(GenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
+    def __init__(self, dotenv: Mapping[str, str]):
         api_key = dotenv.get("OPENAI_API_KEY")
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
