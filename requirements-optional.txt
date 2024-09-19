@@ -1,7 +1,0 @@
-# may have to install autoawq from wheel, like pip install https://github.com/casper-hansen/AutoAWQ/releases/download/v0.1.6/autoawq-0.1.6+cu118-cp310-cp310-linux_x86_64.whl
-autoawq
-# also pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu118
-diffusers
-discord.py
-vllm==0.2.7
-bitsandbytes==0.43.0

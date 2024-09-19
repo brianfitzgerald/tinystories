@@ -1,4 +1,3 @@
-print("Loading dependencies...")
 from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 from transformers.models.t5.tokenization_t5 import T5Tokenizer
 from huggingface_hub import login, HfApi
