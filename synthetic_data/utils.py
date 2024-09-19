@@ -64,15 +64,6 @@ class SyntheticToolCallDPORow:
     agent_output_rejected: str
 
 
-class GenerationSource(str, Enum):
-    OPENAI = "openai"
-    VLLM = "vllm"
-    OPENROUTER = "openrouter"
-    GROQ = "groq"
-    ANTHROPIC = "anthropic"
-    GEMINI = "gemini"
-
-
 class SeedDataFormat(Enum):
     TSV = "tsv"
     HF_DATASET = "hf_dataset"

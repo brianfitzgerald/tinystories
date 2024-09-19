@@ -22,17 +22,12 @@ from synthetic_data.tasks import (
 )
 
 from synthetic_data.generation import (
+    MODEL_WRAPPER_CLASSES,
     GenerationWrapper,
-    GroqGenerationWrapper,
-    AnthropicGenerationWrapper,
-    GeminiWrapper,
-    OpenAIGenerationWrapper,
-    OpenRouterGenerationWrapper,
-    VLLMWrapper,
+    GenerationSource,
     upload_dataset,
 )
 from synthetic_data.utils import (
-    GenerationSource,
     SeedDataFormat,
     print_result_dicts,
 )
@@ -44,15 +39,6 @@ DATA_TASKS: Dict[str, type[SFTDataTask]] = {
     "squad_extractive_qa": SquadExtractiveQA,
     "dolly_entity_extraction": DollyEntityExtraction,
     "goody": Goody2,
-}
-
-MODEL_WRAPPER_CLASSES = {
-    GenerationSource.OPENAI: OpenAIGenerationWrapper,
-    GenerationSource.VLLM: VLLMWrapper,
-    GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
-    GenerationSource.GROQ: GroqGenerationWrapper,
-    GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
-    GenerationSource.GEMINI: GeminiWrapper,
 }
 
 

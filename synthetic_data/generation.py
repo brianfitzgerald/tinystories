@@ -9,6 +9,7 @@ from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
 import google.generativeai as genai
 from google.generativeai.types import ContentDict
+from enum import Enum
 
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
@@ -182,7 +183,7 @@ def _chatgpt_to_gemini(conversation: Conversation) -> List[ContentDict]:
                     {
                         "type": "text",
                         "content": message["content"],
-                    }
+                    }  # type: ignore
                 ],
             }
         )
@@ -203,3 +204,22 @@ class GeminiWrapper(GenerationWrapper):
             completions.append(completion)
 
         return completions
+
+
+class GenerationSource(str, Enum):
+    OPENAI = "openai"
+    VLLM = "vllm"
+    OPENROUTER = "openrouter"
+    GROQ = "groq"
+    ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
+
+
+MODEL_WRAPPER_CLASSES = {
+    GenerationSource.OPENAI: OpenAIGenerationWrapper,
+    GenerationSource.VLLM: VLLMWrapper,
+    GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
+    GenerationSource.GROQ: GroqGenerationWrapper,
+    GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
+    GenerationSource.GEMINI: GeminiWrapper,
+}
