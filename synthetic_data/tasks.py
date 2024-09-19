@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
+    ENTITY_EXTRACTION_TUNING_INSTRUCTION,
     TOOL_USE_CATEGORIES,
     format_dalle_prompt_template,
     format_entity_extraction_conversation_template,
@@ -440,6 +441,15 @@ class SquadExtractiveQA(SFTDataTask):
             format_entity_extraction_conversation_template(prompt) for prompt in prompts
         ]
 
+    def format_inference_conversation(self, batch: Dict) -> List[Conversation]:
+        prompts = batch["context"]
+        self.contexts = batch["context"]
+        return [
+            [
+                {"role": "system", "content": ENTITY_EXTRACTION_TUNING_INSTRUCTION},
+            ]
+        ]
+
     def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
         parsed_rows: List[ExtractiveQARow] = []
         for i, completion in enumerate(completions_batch):
@@ -477,7 +487,7 @@ class SquadExtractiveQA(SFTDataTask):
         return out_rows
 
 
-def _filter_row(row: Dict) -> bool:
+def _filter_dolly_row(row: Dict) -> bool:
     ctx = row["context"]
     return ctx is not None and ctx != ""
 
@@ -488,7 +498,7 @@ class DollyEntityExtraction(SquadExtractiveQA):
 
     def preprocess_dataset(self, dataset: Dataset) -> Dataset:
         logger.info(f"Original dataset length: {len(dataset)}")
-        dataset = dataset.filter(_filter_row)
+        dataset = dataset.filter(_filter_dolly_row)
         logger.info(f"Filtered dataset length: {len(dataset)}")
         return dataset
 
