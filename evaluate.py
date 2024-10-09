@@ -53,7 +53,7 @@ def main(max_concurrent: int = 4):
         all_futures = []
 
         for batch in dataset.iter(batch_size=128): # type: ignore
-            prompts_batch = [task.format_input_conversation(sample) for sample in _to_list_of_samples(batch)]
+            prompts_batch = [task.format_inference_conversation(sample) for sample in _to_list_of_samples(batch)]
             for model_config in MODEL_CONFIGS:
                 for prompt in prompts_batch:
                     future = executor.submit(evaluate_sample, model_config, prompt)
