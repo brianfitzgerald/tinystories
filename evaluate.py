@@ -1,3 +1,4 @@
+import asyncio
 from fire import Fire
 from dataclasses import dataclass
 from typing import Dict, List, cast
@@ -9,6 +10,7 @@ from synthetic_data.generation import (
 import os
 from dotenv import dotenv_values
 
+from rich import print as rprint
 
 from datasets import load_dataset, Dataset
 from loguru import logger
@@ -41,8 +43,8 @@ MODEL_CONFIGS = [
 ]
 
 
-def evaluate_sample(model_config: ModelConfig, prompt: List[Conversation]):
-    out = model_config.wrapper.generate(prompt)
+async def evaluate_sample(model_config: ModelConfig, prompt: List[Conversation]):
+    out = await model_config.wrapper.generate([prompt])
     return out
 
 
@@ -56,36 +58,32 @@ TASKS = [
         "roborovski/dolly-entity-extraction",
         DollyEntityExtraction,
     ),
-    EvalTask(
-        "humaneval",
-        "openai/openai_humaneval",
-        HumanEval
-    )
+    EvalTask("humaneval", "openai/openai_humaneval", HumanEval),
 ]
 
 
-def main(max_concurrent: int = 4, task_name: str = "dolly-entity-extraction"):
-    dataset = cast(Dataset, load_dataset("roborovski/dolly-entity-extraction"))["train"]
-
+async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
     eval_task = next(t for t in TASKS if t.name == task_name)
     task = eval_task.task_class()
 
-    with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+    dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))["test"]
 
-        all_futures = []
+    all_futures = []
 
-        for batch in dataset.iter(batch_size=128):  # type: ignore
-            prompts_batch = [
-                task.format_inference_conversation(sample)
-                for sample in _to_list_of_samples(batch)
-            ]
-            for model_config in MODEL_CONFIGS:
-                for prompt in prompts_batch:
-                    future = executor.submit(evaluate_sample, model_config, prompt)
-                    all_futures.append(future)
+    for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
+        prompts_batch = [
+            task.format_inference_conversation(sample)
+            for sample in _to_list_of_samples(batch)
+        ]
+        for model_config in MODEL_CONFIGS:
+            for prompt in prompts_batch:
+                all_futures.append(
+                    asyncio.create_task(evaluate_sample(model_config, prompt))
+                )
 
-        for future in as_completed(all_futures):
-            print(future.result())
+        results = await asyncio.gather(*all_futures)
+        for result in results:
+            rprint(result)
 
 
 Fire(main)

@@ -99,11 +99,11 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 ]
                 return completions
             except Exception as e:
-                logger.info(
+                logger.error(
                     f"Error while generating: {e}, retries left: {self.n_retries}"
                 )
                 self.n_retries -= 1
-                if self.n_retries == 0:
+                if self.n_retries <= 0:
                     return []
 
 

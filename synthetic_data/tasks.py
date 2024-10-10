@@ -24,6 +24,8 @@ import json
 from pydantic import ValidationError
 from datasets import Dataset
 from loguru import logger
+import rich
+import pprint
 
 from synthetic_data.utils import (
     Conversation,
@@ -72,6 +74,7 @@ class BaseTask(ABC):
 
     def evaluate_completion(self, prompt: List[Conversation]):
         raise NotImplementedError
+
 
 class DPODataTask(BaseTask):
 
@@ -540,4 +543,18 @@ class Goody2(BaseTask):
 
 
 class HumanEval(BaseTask):
-    pass
+
+    def format_inference_conversation(self, sample: Dict) -> Conversation:
+        fn_name, tests = sample["entry_point"], sample["test"]
+        formatted_msg = f"def {fn_name}():\n    pass\n{tests}"
+        conv: Conversation = [
+            {
+                "role": "system",
+                "content": f"Please write the function definition for {fn_name}.",
+            },
+            {
+                "role": "user",
+                "content": formatted_msg,
+            },
+        ]
+        return conv
