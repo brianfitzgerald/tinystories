@@ -14,7 +14,7 @@ from synthetic_data.tasks import (
     DPODataTask,
     Goody2,
     PromptUpsample,
-    SFTDataTask,
+    BaseTask,
     Toolformer,
     SyntheticToolCalls,
     SquadExtractiveQA,
@@ -32,7 +32,7 @@ from synthetic_data.utils import (
     print_result_dicts,
 )
 
-DATA_TASKS: Dict[str, type[SFTDataTask]] = {
+DATA_TASKS: Dict[str, type[BaseTask]] = {
     "toolformer": Toolformer,
     "prompt_upsample": PromptUpsample,
     "synthetic_tool_calls": SyntheticToolCalls,

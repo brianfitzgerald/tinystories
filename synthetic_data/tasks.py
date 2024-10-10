@@ -40,7 +40,7 @@ from synthetic_data.utils import (
 )
 
 
-class SFTDataTask(ABC):
+class BaseTask(ABC):
     seed_data_format: SeedDataFormat = SeedDataFormat.SYNTHETIC
 
     seed_data_location: str
@@ -64,8 +64,16 @@ class SFTDataTask(ABC):
         """
         raise NotImplementedError
 
+    def format_inference_conversation(self, batch: Dict) -> List[Conversation]:
+        """
+        Prompt template to use for generating initial seed data.
+        """
+        raise NotImplementedError
 
-class DPODataTask(SFTDataTask):
+    def evaluate_completion(self, prompt: List[Conversation]):
+        raise NotImplementedError
+
+class DPODataTask(BaseTask):
 
     # Name for the dataset used to cache the seed data.
     # Once all the seed data is generated, this dataset will be used to cache the seed data.
@@ -86,7 +94,7 @@ class DPODataTask(SFTDataTask):
         raise NotImplementedError
 
 
-class PromptUpsample(SFTDataTask):
+class PromptUpsample(BaseTask):
     seed_data_format = SeedDataFormat.TSV
     seed_data_location = "gs://openai-datasets/prompt-upsample/seed-data.tsv"
     output_dataset_name = "prompt-upsample"
@@ -409,7 +417,7 @@ class GlaiveDPO(DPODataTask):
         ]
 
 
-class SquadExtractiveQA(SFTDataTask):
+class SquadExtractiveQA(BaseTask):
     """
     Performs the following steps:
     - Generate JSON struct from the prompt.
@@ -503,7 +511,7 @@ class DollyEntityExtraction(SquadExtractiveQA):
         return dataset
 
 
-class Goody2(SFTDataTask):
+class Goody2(BaseTask):
     seed_data_format = SeedDataFormat.HF_DATASET
     seed_data_location = "yahma/alpaca-cleaned"
     empty_dataset_format = {
@@ -529,3 +537,7 @@ class Goody2(SFTDataTask):
                 }
             )
         return res
+
+
+class HumanEval(BaseTask):
+    pass
