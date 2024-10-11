@@ -88,7 +88,7 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
                 rprint(f"Tests: {sample['test']}")
                 evaluation_results = evaluate_sample(
                     sample["prompt"],
-                    generated.replace("```", ""),
+                    generated.replace("```", "").replace("python", ""),
                     sample["test"],
                     sample["entry_point"],
                 )
