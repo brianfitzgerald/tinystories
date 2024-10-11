@@ -1,8 +1,8 @@
+import traceback
 from transformers.agents.python_interpreter import (
     evaluate_python_code,
     LIST_SAFE_MODULES,
 )
-import traceback
 
 ALLOWED_FNS = {
     range,
@@ -50,7 +50,6 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str):
             ALLOWED_FN_DICT,
             authorized_imports=allowed_imports,
         )
-        print(fn)
+        return fn
     except Exception as e:
         traceback.print_exc()
-    return fn

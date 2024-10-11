@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import openai
+from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
 from typing import List, Dict, Mapping, cast
 from datasets import Dataset, concatenate_datasets
@@ -71,7 +71,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         api_key = dotenv.get("OPENAI_API_KEY")
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
-        self.oai_client = openai.AsyncOpenAI(api_key=api_key)
+        self.oai_client = AsyncOpenAI(api_key=api_key)
         self.model_name = "gpt-3.5-turbo"
         self.max_concurrent = 16
         self.n_retries = MAX_RETRIES
@@ -114,7 +114,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             raise ValueError(
                 "OPENROUTER_API_KEY is required for OpenRouterGenerationWrapper"
             )
-        self.oai_client = openai.AsyncOpenAI(
+        self.oai_client = AsyncOpenAI(
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
@@ -127,7 +127,7 @@ class GroqGenerationWrapper(OpenAIGenerationWrapper):
         api_key = dotenv.get("GROQ_API_KEY")
         if api_key is None:
             raise ValueError("GROQ_API_KEY is required for OpenRouterGenerationWrapper")
-        self.oai_client = openai.AsyncOpenAI(
+        self.oai_client = AsyncOpenAI(
             api_key=api_key,
             base_url="https://api.groq.com/openai/v1",
         )
@@ -182,7 +182,7 @@ def _chatgpt_to_gemini(conversation: Conversation) -> List[ContentDict]:
                 "parts": [
                     {
                         "type": "text",
-                        "content": message["content"],
+                        "text": message["content"],
                     }  # type: ignore
                 ],
             }
@@ -200,7 +200,7 @@ class GeminiWrapper(GenerationWrapper):
         completions = []
         for conversation in conversations:
             conv = _chatgpt_to_gemini(conversation)
-            completion = self.model.generate_content_async(conv)
+            completion = await self.model.generate_content_async(conv)
             completions.append(completion)
 
         return completions
