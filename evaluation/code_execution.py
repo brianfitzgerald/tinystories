@@ -45,11 +45,11 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str):
         "collections",
     ]
     try:
-        fn = evaluate_python_code(
+        fn_out = evaluate_python_code(
             full_code,
             ALLOWED_FN_DICT,
             authorized_imports=allowed_imports,
         )
-        return fn
+        return fn_out # type: ignore
     except Exception as e:
         traceback.print_exc()

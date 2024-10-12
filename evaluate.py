@@ -11,6 +11,7 @@ from dotenv import dotenv_values
 
 from rich import print as rprint
 from rich.syntax import Syntax
+from rich.console import Console
 
 from datasets import load_dataset, Dataset
 
@@ -75,6 +76,8 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
 
     dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))["test"]
 
+    console = Console()
+
     all_futures = []
 
     for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
@@ -91,17 +94,30 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
         results = await asyncio.gather(*all_futures)
         for result, sample in results:
             for generated in result:
-                rprint(f"Function: {sample['entry_point']}")
-                rprint(f"Canonical solution:\n {sample['canonical_solution']}")
-                rprint(f"Generated solution:\n {generated}")
-                rprint(f"Tests: {sample['test']}")
+                console.print(f"Function: {sample['entry_point']}")
+                canonical_formatted = Syntax(
+                    sample["canonical_solution"],
+                    "python",
+                    theme="monokai",
+                    line_numbers=True,
+                )
+                console.print(f"Canonical solution:")
+                console.print(canonical_formatted)
+                generated_code = generated.replace("```", "").replace("python", "")
                 evaluation_results = evaluate_sample(
                     sample["prompt"],
-                    generated.replace("```", "").replace("python", ""),
+                    generated_code,
                     sample["test"],
                     sample["entry_point"],
                 )
-                rprint(f"Evaluation results: {evaluation_results}")
+                generated_code_formatted = Syntax(
+                    generated_code,
+                    "python",
+                    theme="monokai",
+                    line_numbers=True,
+                )
+                console.print(f"Generated solution:")
+                console.print(generated_code_formatted)
 
 
 Fire(main)
