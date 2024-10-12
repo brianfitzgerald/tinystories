@@ -3,13 +3,14 @@ from fire import Fire
 from dataclasses import dataclass
 from typing import Dict, List, cast
 from synthetic_data.generation import (
+    GeminiWrapper,
     GenerationWrapper,
-    OpenAIGenerationWrapper,
 )
 import os
 from dotenv import dotenv_values
 
 from rich import print as rprint
+from rich.syntax import Syntax
 
 from datasets import load_dataset, Dataset
 
@@ -36,12 +37,21 @@ dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # typ
 
 
 MODEL_CONFIGS = [
-    ModelConfig(name="GPT-4o", wrapper=OpenAIGenerationWrapper(dotenv)),
+    # ModelConfig(name="GPT-4o", wrapper=OpenAIGenerationWrapper(dotenv)),
+    ModelConfig(
+        name="Gemini 1.5 Flash 8b",
+        wrapper=GeminiWrapper(
+            "gemini-1.5-flash-8b",
+            system_instruction="If asked to generate source code, always generate the code within a source block without any surrounding text.",
+        ),
+    ),
 ]
 
 
-async def sample_worker(model_config: ModelConfig, prompt: List[Conversation], sample: Dict):
-    out = await model_config.wrapper.generate([prompt]) # type: ignore
+async def sample_worker(
+    model_config: ModelConfig, prompt: List[Conversation], sample: Dict
+):
+    out = await model_config.wrapper.generate([prompt])  # type: ignore
     return out, sample
 
 
@@ -70,8 +80,7 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
     for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
         samples_batch = _list_of_dicts_to_dict_of_lists(batch)
         prompts_batch = [
-            task.format_inference_conversation(sample)
-            for sample in samples_batch 
+            task.format_inference_conversation(sample) for sample in samples_batch
         ]
         for model_config in MODEL_CONFIGS:
             for prompt, sample in zip(prompts_batch, samples_batch):

@@ -546,15 +546,14 @@ class HumanEval(BaseTask):
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         fn_name, tests = sample["entry_point"], sample["test"]
-        formatted_msg = f"def {fn_name}():\n    pass\n{tests}"
         conv: Conversation = [
             {
-                "role": "system",
-                "content": f"Please write the function definition for {fn_name}.",
+                "role": "user",
+                "content": f"Generate the body of a function called `{fn_name}` in Python which passes the following tests:",
             },
             {
                 "role": "user",
-                "content": formatted_msg,
+                "content": tests,
             },
         ]
         return conv

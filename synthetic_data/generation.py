@@ -9,8 +9,8 @@ from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
 import google.generativeai as genai
 from google.generativeai.types import ContentDict
+from google.generativeai.types.content_types import ContentsType
 from enum import Enum
-
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
 
@@ -171,20 +171,18 @@ class AnthropicGenerationWrapper(GenerationWrapper):
             return []
 
 
-def _chatgpt_to_gemini(conversation: Conversation) -> List[ContentDict]:
+def _chatgpt_to_gemini(conversation: Conversation) -> ContentsType:
 
     out: List[ContentDict] = []
     for message in conversation:
         assert "content" in message, f"Message {message} does not have 'content' key"
+        assert isinstance(
+            message["content"], str
+        ), f"Message {message} content is not a string"
         out.append(
             {
                 "role": message["role"],
-                "parts": [
-                    {
-                        "type": "text",
-                        "text": message["content"],
-                    }  # type: ignore
-                ],
+                "parts": [message["content"]],
             }
         )
 
@@ -193,15 +191,17 @@ def _chatgpt_to_gemini(conversation: Conversation) -> List[ContentDict]:
 
 class GeminiWrapper(GenerationWrapper):
 
-    def __init__(self) -> None:
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+    def __init__(self, model_name: str, system_instruction: str = "") -> None:
+        self.model = genai.GenerativeModel(
+            model_name, system_instruction=system_instruction
+        )
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         completions = []
         for conversation in conversations:
-            conv = _chatgpt_to_gemini(conversation)
-            completion = await self.model.generate_content_async(conv)
-            completions.append(completion)
+            gemini_conv = _chatgpt_to_gemini(conversation)
+            completion = await self.model.generate_content_async(gemini_conv)
+            completions.append(completion.parts[0].text)
 
         return completions
 
