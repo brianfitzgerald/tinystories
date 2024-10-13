@@ -1,5 +1,6 @@
 import ast
 import traceback
+from typing import List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
 
@@ -103,7 +104,7 @@ def print_code_snippet(snippet: str, console: Console):
     console.print(formatted_snippet)
 
 
-def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str):
+def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
     prompt = prompt.replace(">>>", "\n")
     tests = assertions_to_tests(tests, entrypoint)
     full_code = prompt + solution + tests + "\ncheck()"
@@ -120,6 +121,6 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str):
             ALLOWED_FN_DICT,
             authorized_imports=allowed_imports,
         )
-        return fn_out  # type: ignore
+        return None, fn_out # type: ignore
     except Exception as e:
-        traceback.print_exc()
+        return str(e), []
