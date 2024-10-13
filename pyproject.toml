@@ -10,7 +10,7 @@ dependencies = [
     "wandb",
     "fire",
     "tensorboard",
-    "huggingface_hub==0.20.3",
+    "huggingface_hub",
     "sentencepiece",
     "einops",
     "pydantic==2.6.3",
@@ -31,7 +31,7 @@ dependencies = [
     "google-generativeai",
     "datacommons-pandas>=0.0.3",
     "ipykernel>=6.29.5",
-    "transformers>=4.40.2",
+    "transformers==4.45.2",
     "torch>=2.4.1",
     "rich>=13.9.2",
 ]
