@@ -17,7 +17,7 @@ from datasets import load_dataset, Dataset
 
 from synthetic_data.tasks import DollyEntityExtraction, HumanEval, BaseTask
 from synthetic_data.utils import Conversation
-from evaluation.code_execution import evaluate_sample
+from evaluation.code_execution import evaluate_sample, print_code_snippet
 
 
 @dataclass
@@ -95,14 +95,8 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
         for result, sample in results:
             for generated in result:
                 console.print(f"Function: {sample['entry_point']}")
-                canonical_formatted = Syntax(
-                    sample["canonical_solution"],
-                    "python",
-                    theme="monokai",
-                    line_numbers=True,
-                )
                 console.print(f"Canonical solution:")
-                console.print(canonical_formatted)
+                print_code_snippet(sample["canonical_solution"], console)
                 generated_code = generated.replace("```", "").replace("python", "")
                 evaluation_results = evaluate_sample(
                     sample["prompt"],
@@ -110,14 +104,11 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
                     sample["test"],
                     sample["entry_point"],
                 )
-                generated_code_formatted = Syntax(
-                    generated_code,
-                    "python",
-                    theme="monokai",
-                    line_numbers=True,
-                )
                 console.print(f"Generated solution:")
-                console.print(generated_code_formatted)
+                print_code_snippet(generated_code, console)
+                console.print(f"Test code:")
+                print_code_snippet(sample["test"], console)
+                console.print("=" * console.size.width)
 
 
 Fire(main)
