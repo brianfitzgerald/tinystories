@@ -1,24 +1,20 @@
 import asyncio
-from fire import Fire
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, cast
-from synthetic_data.generation import (
-    GeminiWrapper,
-    GenerationWrapper,
-)
-import os
-from dotenv import dotenv_values
 
+from datasets import Dataset, load_dataset
+from dotenv import dotenv_values
+from fire import Fire
 from rich import print as rprint
-from rich.syntax import Syntax
 from rich.console import Console
 from rich.progress import Progress
+from rich.syntax import Syntax
 
-from datasets import load_dataset, Dataset
-
-from synthetic_data.tasks import DollyEntityExtraction, HumanEval, BaseTask
-from synthetic_data.utils import Conversation
 from evaluation.code_execution import evaluate_sample, print_code_snippet
+from synthetic_data.generation import GeminiWrapper, GenerationWrapper
+from synthetic_data.tasks import BaseTask, DollyEntityExtraction, HumanEval
+from synthetic_data.utils import Conversation
 
 
 @dataclass
@@ -92,7 +88,7 @@ class EvalResult:
     evaluation_results: List[bool]
 
 
-async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
+async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
     eval_task = next(t for t in TASKS if t.name == task_name)
     task = eval_task.task_class()
 
@@ -100,12 +96,12 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
 
     console = Console()
 
-    all_futures = []
     eval_results: List[EvalResult] = []
 
     with Progress() as progress:
         prog_task = progress.add_task("Evaluating", total=len(dataset))
         for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
+            all_futures = []
             samples_batch = _list_of_dicts_to_dict_of_lists(batch)
             prompts_batch = [
                 task.format_inference_conversation(sample) for sample in samples_batch
@@ -146,16 +142,16 @@ async def main(max_concurrent: int = 4, task_name: str = "humaneval"):
                             evaluation_results,
                         )
                     )
-    
+
     n_all_tests_passed = sum(
         sum(res.evaluation_results) == len(res.evaluation_results)
         for res in eval_results
     )
-    n_tests_passed = sum(
-        sum(res.evaluation_results) for res in eval_results
-    )
+    n_tests_passed = sum(sum(res.evaluation_results) for res in eval_results)
     total_n_tests = sum(len(res.evaluation_results) for res in eval_results)
-    console.print(f"Samples where all tests passed: {n_all_tests_passed}/{len(eval_results)}")
+    console.print(
+        f"Samples where all tests passed: {n_all_tests_passed}/{len(eval_results)}"
+    )
     console.print(f"Total tests passed: {n_tests_passed}/{total_n_tests}")
 
 

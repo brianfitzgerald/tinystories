@@ -30,6 +30,7 @@ ALLOWED_FNS = {
     filter,
     reversed,
     chr,
+    float,
     ord,
     tuple,
     bool,
