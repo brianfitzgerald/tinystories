@@ -215,3 +215,10 @@ async def gather_with_concurrency_limit(n: int, *coros):
             return await coro
 
     return await asyncio.gather(*(sem_coro(c) for c in coros))
+
+
+def lddl(dict_of_lists):
+    """
+    List of dicts to dict of lists.
+    """
+    return [dict(zip(dict_of_lists, t)) for t in zip(*dict_of_lists.values())]

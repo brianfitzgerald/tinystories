@@ -2,6 +2,7 @@ from abc import ABC
 import random
 import traceback
 from typing import Dict, List, Optional
+from evaluation.code_execution import evaluate_sample
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
@@ -36,6 +37,7 @@ from synthetic_data.utils import (
     is_valid_python,
     clean_message,
     get_matches,
+    lddl,
 )
 
 
@@ -75,9 +77,6 @@ class BaseTask(ABC):
 
 class DPOTask(BaseTask):
 
-    # Name for the dataset used to cache the seed data.
-    # Once all the seed data is generated, this dataset will be used to cache the seed data.
-    dpo_seed_cache_dataset_name: Optional[str] = None
     n_dpo_completions: int = 2
 
 
@@ -485,7 +484,11 @@ class Goody2(BaseTask):
         return res
 
 
-class HumanEval(BaseTask):
+class HumanEval(DPOTask):
+
+    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_location = "openai/openai_humaneval"
+    output_dataset_name = "humaneval-dpo-pairs"
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         fn_name, tests = sample["entry_point"], sample["test"]
@@ -493,14 +496,22 @@ class HumanEval(BaseTask):
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         fn_name, tests = batch["entry_point"], batch["test"]
-        return [format_code_generation_prompt(f, i) for f, i in zip(fn_name, tests)]
+        self.input_batch = batch
+        self.input_conversations = [
+            format_code_generation_prompt(f, i) for f, i in zip(fn_name, tests)
+        ]
+        return self.input_conversations
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
-        for completion in zip(completions):
+        for completion, sample in zip(
+            completions, lddl(self.input_batch)
+        ):
+            err, results = evaluate_sample(completion, sample["entry_point"], sample["test"], sample["entry_point"])
             res.append(
                 {
                     "response": completion,
+                    "entry_point": sample["entry_point"],
                 }
             )
         return res

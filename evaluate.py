@@ -14,7 +14,7 @@ from rich.syntax import Syntax
 from evaluation.code_execution import evaluate_sample, print_code_snippet
 from synthetic_data.generation import GeminiWrapper, GenerationWrapper
 from synthetic_data.tasks import BaseTask, DollyEntityExtraction, HumanEval
-from synthetic_data.utils import Conversation
+from synthetic_data.utils import Conversation, lddl
 
 
 @dataclass
@@ -51,10 +51,6 @@ async def sample_worker(
 ):
     out = await model_config.wrapper.generate([prompt])  # type: ignore
     return out, sample
-
-
-def _list_of_dicts_to_dict_of_lists(dict_of_lists):
-    return [dict(zip(dict_of_lists, t)) for t in zip(*dict_of_lists.values())]
 
 
 TASKS = [
@@ -102,7 +98,7 @@ async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
         prog_task = progress.add_task("Evaluating", total=len(dataset))
         for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
             all_futures = []
-            samples_batch = _list_of_dicts_to_dict_of_lists(batch)
+            samples_batch = lddl(batch)
             prompts_batch = [
                 task.format_inference_conversation(sample) for sample in samples_batch
             ]

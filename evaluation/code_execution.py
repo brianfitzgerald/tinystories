@@ -106,6 +106,10 @@ def print_code_snippet(snippet: str, console: Console):
 
 
 def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
+    """
+    Evaluate a code snippet against a set of tests.
+    Returns an error message and a list of test results.
+    """
     prompt = prompt.replace(">>>", "\n")
     tests = assertions_to_tests(tests, entrypoint)
     full_code = prompt + solution + tests + "\ncheck()"

@@ -19,6 +19,7 @@ from synthetic_data.tasks import (
     SyntheticToolCalls,
     SquadExtractiveQA,
     DollyEntityExtraction,
+    HumanEval
 )
 
 from synthetic_data.generation import (
@@ -39,18 +40,19 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
     "squad_extractive_qa": SquadExtractiveQA,
     "dolly_entity_extraction": DollyEntityExtraction,
     "goody": Goody2,
+    'humaneval': HumanEval
 }
 
 
 def main(
     # n batches
     upload_every: int = 10,
-    batch_size: int = 16,
+    batch_size: int = 8,
     restart: bool = False,
     pairs: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENROUTER,
-    task_name: str = "dolly_entity_extraction",
+    task_name: str = "humaneval",
     n_epochs: int = 1,
     **kwargs,
 ):
@@ -64,7 +66,6 @@ def main(
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
     task = DATA_TASKS[task_name]()
-    is_dpo_task = isinstance(task, DPOTask)
 
     if pairs and not isinstance(task, DPOTask):
         raise ValueError("generate_pairs is only supported for DPO tasks.")
