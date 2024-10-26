@@ -43,12 +43,13 @@ from synthetic_data.utils import (
 
 class BaseTask(ABC):
     seed_data_format: SeedDataFormat = SeedDataFormat.SYNTHETIC
+    seed_data_split = "train"
 
     seed_data_location: str
     output_dataset_name: str
     output_dataset_org: str = "roborovski"
 
-    empty_dataset_format: Dict[str, List]
+    dataset_columns: List[str] = []
 
     def preprocess_dataset(self, dataset: Dataset) -> Dataset:
         return dataset
@@ -86,11 +87,7 @@ class PromptUpsample(BaseTask):
     output_dataset_name = "prompt-upsample"
     output_dataset_org = "openai"
 
-    empty_dataset_format = {
-        "Prompt": [],
-        "Category": [],
-        "Upsampled": [],
-    }
+    dataset_columns = ["Prompt", "Category", "Upsampled"]
 
     def __init__(self) -> None:
         super().__init__()
@@ -108,12 +105,7 @@ class Toolformer(DPOTask):
     output_dataset_name = "synthetic-toolformer-dpo"
     dataset_org = "roborovski"
 
-    empty_dataset_format = {
-        "system": [],
-        "question": [],
-        "chosen": [],
-        "rejected": [],
-    }
+    dataset_columns = ["system", "question", "chosen", "rejected"]
 
     original_rows_batch: List[ToolFormerRow] = []
 
@@ -209,23 +201,7 @@ class SyntheticToolCalls(DPOTask):
 
     output_dataset_name = "synthetic-tool-calls-v2-dpo-pairs"
 
-    empty_dataset_format = {
-        "tool": [],
-        "question": [],
-        "call_result": [],
-        "tool_call": [],
-    }
-
-    empty_dpo_dataset_format = {
-        "tool": [],
-        "question": [],
-        "tool_call_accepted": [],
-        "call_result_accepted": [],
-        "agent_output_accepted": [],
-        "tool_call_rejected": [],
-        "call_result_rejected": [],
-        "agent_output_rejected": [],
-    }
+    dataset_columns = ["tool", "question", "tool_call", "call_result"]
 
     original_rows_batch: List[SyntheticToolCallRow] = []
 
@@ -375,12 +351,7 @@ class SquadExtractiveQA(BaseTask):
     output_dataset_name = "squad-extractive-qa"
     output_dataset_org = "roborovski"
 
-    empty_dataset_format = {
-        "id": [],
-        "context": [],
-        "json_schema": [],
-        "fields": [],
-    }
+    dataset_columns = ["id", "context", "json_schema", "fields"]
 
     def __init__(self) -> None:
         super().__init__()
@@ -459,10 +430,7 @@ class DollyEntityExtraction(SquadExtractiveQA):
 class Goody2(BaseTask):
     seed_data_format = SeedDataFormat.HF_DATASET
     seed_data_location = "yahma/alpaca-cleaned"
-    empty_dataset_format = {
-        "instruction": [],
-        "response": [],
-    }
+    dataset_columns = ["instruction", "response"]
     output_dataset_name = "open-goody2"
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
@@ -488,7 +456,10 @@ class HumanEval(DPOTask):
 
     seed_data_format = SeedDataFormat.HF_DATASET
     seed_data_location = "openai/openai_humaneval"
+    seed_data_split = "test"
     output_dataset_name = "humaneval-dpo-pairs"
+
+    dataset_columns = ["chosen", "rejected", "id", "prompt"]
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         fn_name, tests = sample["entry_point"], sample["test"]
@@ -504,10 +475,10 @@ class HumanEval(DPOTask):
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
-        for completion, sample in zip(
-            completions, lddl(self.input_batch)
-        ):
-            err, results = evaluate_sample(completion, sample["entry_point"], sample["test"], sample["entry_point"])
+        for completion, sample in zip(completions, lddl(self.input_batch)):
+            err, results = evaluate_sample(
+                completion, sample["entry_point"], sample["test"], sample["entry_point"]
+            )
             res.append(
                 {
                     "response": completion,

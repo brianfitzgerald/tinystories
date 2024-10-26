@@ -77,6 +77,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         self.n_retries = MAX_RETRIES
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
+        self.n_retries = MAX_RETRIES
         while True:
             completion_requests = []
             for conversation in conversations:
@@ -91,7 +92,6 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 results: List[ChatCompletion] = await gather_with_concurrency_limit(
                     self.max_concurrent, *completion_requests
                 )
-                self.n_retries = MAX_RETRIES
                 completions = [
                     result.choices[0].message.content
                     for result in results

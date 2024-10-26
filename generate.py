@@ -19,7 +19,7 @@ from synthetic_data.tasks import (
     SyntheticToolCalls,
     SquadExtractiveQA,
     DollyEntityExtraction,
-    HumanEval
+    HumanEval,
 )
 
 from synthetic_data.generation import (
@@ -40,7 +40,7 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
     "squad_extractive_qa": SquadExtractiveQA,
     "dolly_entity_extraction": DollyEntityExtraction,
     "goody": Goody2,
-    'humaneval': HumanEval
+    "humaneval": HumanEval,
 }
 
 
@@ -66,6 +66,7 @@ def main(
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
     task = DATA_TASKS[task_name]()
+    split = task.seed_data_split
 
     if pairs and not isinstance(task, DPOTask):
         raise ValueError("generate_pairs is only supported for DPO tasks.")
@@ -81,7 +82,7 @@ def main(
 
     logger.info("Loading output dataset...")
     if restart:
-        output_dataset = Dataset.from_dict(task.empty_dataset_format)
+        output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
     else:
         try:
             output_dataset = cast(
@@ -94,7 +95,7 @@ def main(
             # TODO filter for rows that don't need completion
         except (EmptyDatasetError, ValueError):
             logger.info("No existing dataset found, starting from scratch...")
-            output_dataset = Dataset.from_dict(task.empty_dataset_format)
+            output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
 
     input_dataset: Dataset
     input_dataset_location: Optional[str] = None
@@ -106,7 +107,6 @@ def main(
     logger.info(
         f"Loading input dataset: {input_dataset_location}, format: {task.seed_data_format.value}"
     )
-    split = "train"
     assert input_dataset_location
     if (
         task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.SYNTHETIC)
@@ -114,7 +114,7 @@ def main(
     ):
         if len(output_dataset) > 0 and resume_input_position:
             logger.info(f"Resuming from position {len(output_dataset)}")
-            split = f"train[{len(output_dataset)}:]"
+            split = f"{split}[{len(output_dataset)}:]"
         input_dataset = cast(Dataset, load_dataset(input_dataset_location, split=split))
     elif task.seed_data_format == SeedDataFormat.TSV:
         seed_data = pd.read_csv(input_dataset_location, on_bad_lines="skip")
