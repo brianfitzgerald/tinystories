@@ -103,14 +103,14 @@ def print_code_snippet(snippet: str, console: Console):
     console.print(formatted_snippet)
 
 
-def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
+def evaluate_sample(sample: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
     """
     Evaluate a code snippet against a set of tests.
     Returns an error message and a list of test results.
     """
-    prompt = prompt.replace(">>>", "\n")
+    sample = sample.replace(">>>", "\n").replace("```python", "").replace("```", "")
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
-    full_code = prompt + solution + tests + "\ncheck()"
+    full_code = sample + solution + tests + "\ncheck()"
     allowed_imports = LIST_SAFE_MODULES + [
         "typing",
         "copy",
@@ -126,4 +126,5 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> 
         )
         return None, fn_out # type: ignore
     except Exception as e:
+        traceback.print_exc()
         return str(e), [False] * n_asserts

@@ -479,7 +479,7 @@ class HumanEval(DPOTask):
 
         for f, i in zip(fn_name, tests):
             self.input_conversations.extend(
-                [format_code_generation_prompt(f, i) * self.n_completions_per_sample]
+                [format_code_generation_prompt(f, i)] * self.n_completions_per_sample
             )
         return self.input_conversations
 
