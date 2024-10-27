@@ -40,6 +40,7 @@ ALLOWED_FN_DICT = {fn.__name__: fn for fn in ALLOWED_FNS}
 class AssertToBoolTransformer(ast.NodeTransformer):
     def __init__(self, result_list_name="results"):
         self.result_list_name = result_list_name
+        self.n_asserts = 0
 
     def visit_FunctionDef(self, node):
         list_init = ast.Assign(
@@ -75,6 +76,7 @@ class AssertToBoolTransformer(ast.NodeTransformer):
                 keywords=[],
             )
         )
+        self.n_asserts += 1
 
         return ast.copy_location(append_expr, node)
 
@@ -88,8 +90,7 @@ def assertions_to_tests(test_code: str, entrypoint: str):
     transformed_tree = transformer.visit(tree)
 
     transformed_code = ast.unparse(transformed_tree)
-    print_code_snippet(transformed_code, Console())
-    return transformed_code
+    return transformed_code, transformer.n_asserts
 
 
 def print_code_snippet(snippet: str, console: Console):
@@ -108,7 +109,7 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> 
     Returns an error message and a list of test results.
     """
     prompt = prompt.replace(">>>", "\n")
-    tests = assertions_to_tests(tests, entrypoint)
+    tests, n_asserts = assertions_to_tests(tests, entrypoint)
     full_code = prompt + solution + tests + "\ncheck()"
     allowed_imports = LIST_SAFE_MODULES + [
         "typing",
@@ -125,4 +126,4 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> 
         )
         return None, fn_out # type: ignore
     except Exception as e:
-        return str(e), []
+        return str(e), [False * n_asserts]
