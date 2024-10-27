@@ -3,7 +3,7 @@ import sys
 import random
 import traceback
 from typing import Dict, List, Optional
-from evaluation.code_execution import evaluate_sample
+from evaluation.code_execution import evaluate_sample, print_code_snippet
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
@@ -25,6 +25,7 @@ import json
 from pydantic import ValidationError
 from datasets import Dataset
 from loguru import logger
+from rich.console import Console
 
 from synthetic_data.utils import (
     Conversation,
@@ -53,6 +54,10 @@ class BaseTask(ABC):
     output_dataset_org: str = "roborovski"
 
     dataset_columns: List[str] = []
+
+    def __init__(self, console: Console) -> None:
+        super().__init__()
+        self.console = console
 
     def preprocess_dataset(self, dataset: Dataset) -> Dataset:
         return dataset
@@ -91,10 +96,6 @@ class PromptUpsample(BaseTask):
     output_dataset_org = "openai"
 
     dataset_columns = ["Prompt", "Category", "Upsampled"]
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.original_rows = []
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         prompts = batch["Prompt"]
@@ -457,8 +458,8 @@ class Goody2(BaseTask):
 
 class HumanEval(DPOTask):
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, console) -> None:
+        super().__init__(console)
         self.n_completions_per_sample = 4
 
     seed_data_format = SeedDataFormat.HF_DATASET
@@ -490,6 +491,8 @@ class HumanEval(DPOTask):
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
+                completion = completion.replace(">>>", "\n").replace("```python", "").replace("```", "")
+                print_code_snippet(completion, self.console)
                 err, results = evaluate_sample(
                     completion, sample["entry_point"], sample["test"], sample["entry_point"]
                 )

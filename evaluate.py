@@ -9,7 +9,6 @@ from fire import Fire
 from rich import print as rprint
 from rich.console import Console
 from rich.progress import Progress
-from rich.syntax import Syntax
 
 from evaluation.code_execution import evaluate_sample, print_code_snippet
 from synthetic_data.generation import GeminiWrapper, GenerationWrapper
@@ -83,7 +82,8 @@ class EvalResult:
 
 async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
     eval_task = next(t for t in TASKS if t.name == task_name)
-    task = eval_task.task_class()
+    console = Console()
+    task = eval_task.task_class(console)
 
     dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))["test"]
 

@@ -3,6 +3,7 @@ import os
 from typing import Dict, List, Optional, cast
 import pandas as pd
 from loguru import logger
+from rich.console import Console
 
 import fire
 from datasets import Dataset, load_dataset
@@ -63,7 +64,8 @@ def main(
     """
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
-    task = DATA_TASKS[task_name]()
+    console = Console()
+    task = DATA_TASKS[task_name](console)
     split = task.seed_data_split
     logger.info("Logging into the Hub...")
     current_dir = os.path.dirname(os.path.abspath(__file__))

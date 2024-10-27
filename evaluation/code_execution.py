@@ -108,7 +108,6 @@ def evaluate_sample(sample: str, solution: str, tests: str, entrypoint: str) -> 
     Evaluate a code snippet against a set of tests.
     Returns an error message and a list of test results.
     """
-    sample = sample.replace(">>>", "\n").replace("```python", "").replace("```", "")
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
     full_code = sample + solution + tests + "\ncheck()"
     allowed_imports = LIST_SAFE_MODULES + [

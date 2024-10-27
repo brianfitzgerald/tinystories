@@ -51,6 +51,7 @@ class MockGenerator(GenerationWrapper):
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         return ["def code():\n\tpass"] * len(conversations)
 
+
 class VLLMWrapper(GenerationWrapper):
     def __init__(self, dotenv: Dict[str, str]):
         from vllm import LLM, SamplingParams  # type: ignore
@@ -83,6 +84,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         self.model_name = "gpt-3.5-turbo"
         self.max_concurrent = 16
         self.n_retries = MAX_RETRIES
+        self.temperature = 0.2
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         self.n_retries = MAX_RETRIES
@@ -92,7 +94,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 request = self.oai_client.chat.completions.create(
                     model=self.model_name,
                     messages=conversation,
-                    temperature=0.2,
+                    temperature=self.temperature,
                     max_tokens=512,
                 )
                 completion_requests.append(request)
@@ -128,6 +130,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
         )
         self.model_name = "google/gemini-flash-1.5"
         self.max_concurrent = 32
+        self.temperature = 0.4
 
 
 class GroqGenerationWrapper(OpenAIGenerationWrapper):
@@ -200,9 +203,7 @@ def _chatgpt_to_gemini(conversation: Conversation) -> ContentsType:
 class GeminiWrapper(GenerationWrapper):
 
     def __init__(self, dotenv) -> None:
-        self.model = genai.GenerativeModel(
-            "models/gemini-1.5-flash-8b"
-        )
+        self.model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         completions = []
