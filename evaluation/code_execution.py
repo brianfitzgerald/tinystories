@@ -126,4 +126,4 @@ def evaluate_sample(prompt: str, solution: str, tests: str, entrypoint: str) -> 
         )
         return None, fn_out # type: ignore
     except Exception as e:
-        return str(e), [False * n_asserts]
+        return str(e), [False] * n_asserts

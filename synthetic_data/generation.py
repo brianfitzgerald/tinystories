@@ -126,7 +126,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.model_name = "meta-llama/llama-3.1-405b-instruct"
+        self.model_name = "google/gemini-flash-1.5"
         self.max_concurrent = 32
 
 

@@ -1,4 +1,5 @@
 from abc import ABC
+import sys
 import random
 import traceback
 from typing import Dict, List, Optional
@@ -484,15 +485,28 @@ class HumanEval(DPOTask):
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
-        for i, completions in enumerate(chunk_list(completions, self.n_completions_per_sample)):
+        for i, completions_for_sample in enumerate(chunk_list(completions, self.n_completions_per_sample)):
             sample = self.input_batch[i]
-            for j, completion in enumerate(completions):
+            best_completion, best_score = None, 0
+            worst_completion, worst_score = None, sys.maxsize
+            for j, completion in enumerate(completions_for_sample):
                 err, results = evaluate_sample(
                     completion, sample["entry_point"], sample["test"], sample["entry_point"]
                 )
-                res.append(
-                    {
-                        "response": completion,
-                    }
-                )
+                tests_passed = sum(results)
+                if tests_passed > best_score:
+                    best_score = tests_passed
+                    best_completion = completion
+                if tests_passed < worst_score:
+                    worst_score = tests_passed
+                    worst_completion = completion
+            res.append(
+                {
+                    "chosen": best_completion,
+                    "rejected": worst_completion,
+                    "task_id": sample["task_id"],
+                    "error": err,
+                    "prompt": self.input_conversations[i + j]
+                }
+            )
         return res

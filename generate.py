@@ -49,9 +49,8 @@ def main(
     upload_every: int = 10,
     batch_size: int = 8,
     restart: bool = False,
-    pairs: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.MOCK,
+    generation_source: GenerationSource = GenerationSource.OPENROUTER,
     task_name: str = "humaneval",
     n_epochs: int = 1,
     **kwargs,
@@ -61,16 +60,11 @@ def main(
     Inputs a seed dataset, that is either given from a CSV or HF dataset,
     or generated from a synthetic source, such as a list of subjects.
 
-    pairs - generate multiple completions and score them. Use the 2 widest scores
     """
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
     task = DATA_TASKS[task_name]()
     split = task.seed_data_split
-
-    if pairs and not isinstance(task, DPOTask):
-        raise ValueError("generate_pairs is only supported for DPO tasks.")
-
     logger.info("Logging into the Hub...")
     current_dir = os.path.dirname(os.path.abspath(__file__))
     dotenv = dotenv_values(os.path.join(current_dir, ".env"))
@@ -110,7 +104,6 @@ def main(
     assert input_dataset_location
     if (
         task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.SYNTHETIC)
-        or pairs
     ):
         if len(output_dataset) > 0 and resume_input_position:
             logger.info(f"Resuming from position {len(output_dataset)}")
