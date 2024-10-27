@@ -357,11 +357,6 @@ class SquadExtractiveQA(BaseTask):
 
     dataset_columns = ["id", "context", "json_schema", "fields"]
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.ids = []
-        self.contexts = []
-
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         prompts = batch["context"]
         self.contexts = batch["context"]

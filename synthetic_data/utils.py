@@ -13,7 +13,7 @@ from pydantic.dataclasses import dataclass
 Conversation = List[ChatCompletionMessageParam]
 ShareGPTConversation = List[Dict[str, str]]
 
-JSONSchemaKey = Union[str, int, float, bool, List[Any], Dict[str, Any]]
+JSONSchemaKey = Union[str, int, float, bool, List[Any], Dict[str, Any], None]
 JSONSchema = Dict[str, JSONSchemaKey]
 
 
@@ -88,6 +88,8 @@ def clean_message(message: JSONSchemaKey):
     # Handle odd edge case where textwrap evaluates the value as a bool
     if message == "True" or message == "False":
         message = message.lower()
+    if message is None:
+        message = ""
     message = message.strip()
     message = message.replace("<|endoftext|>", "")
     message = re.sub(r"\n+|\t+", "", message)
