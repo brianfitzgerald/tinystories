@@ -14,7 +14,7 @@ from rich.syntax import Syntax
 from evaluation.code_execution import evaluate_sample, print_code_snippet
 from synthetic_data.generation import GeminiWrapper, GenerationWrapper
 from synthetic_data.tasks import BaseTask, DollyEntityExtraction, HumanEval
-from synthetic_data.utils import Conversation, lddl
+from synthetic_data.utils import Conversation, ldictl
 
 
 @dataclass
@@ -38,10 +38,7 @@ MODEL_CONFIGS = [
     # ModelConfig(name="GPT-4o", wrapper=OpenAIGenerationWrapper(dotenv)),
     ModelConfig(
         name="Gemini 1.5 Flash 8b",
-        wrapper=GeminiWrapper(
-            "gemini-1.5-flash-8b",
-            system_instruction="If asked to generate source code, always generate the code within a source block without any surrounding text.",
-        ),
+        wrapper=GeminiWrapper({}),
     ),
 ]
 
@@ -98,7 +95,7 @@ async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
         prog_task = progress.add_task("Evaluating", total=len(dataset))
         for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
             all_futures = []
-            samples_batch = lddl(batch)
+            samples_batch = ldictl(batch)
             prompts_batch = [
                 task.format_inference_conversation(sample) for sample in samples_batch
             ]

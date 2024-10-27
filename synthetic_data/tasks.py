@@ -33,11 +33,13 @@ from synthetic_data.utils import (
     ToolFormerDPORow,
     ToolFormerRow,
     ExtractiveQARow,
+    chunk_list,
+    dictl,
     extract_json_code_blocks,
     is_valid_python,
     clean_message,
     get_matches,
-    lddl,
+    ldictl,
 )
 
 
@@ -454,6 +456,10 @@ class Goody2(BaseTask):
 
 class HumanEval(DPOTask):
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.n_completions_per_sample = 4
+
     seed_data_format = SeedDataFormat.HF_DATASET
     seed_data_location = "openai/openai_humaneval"
     seed_data_split = "test"
@@ -467,22 +473,26 @@ class HumanEval(DPOTask):
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         fn_name, tests = batch["entry_point"], batch["test"]
-        self.input_batch = batch
-        self.input_conversations = [
-            format_code_generation_prompt(f, i) for f, i in zip(fn_name, tests)
-        ]
+        self.input_batch = dictl(batch)
+        self.input_conversations = []
+
+        for f, i in zip(fn_name, tests):
+            self.input_conversations.extend(
+                [format_code_generation_prompt(f, i) * self.n_completions_per_sample]
+            )
         return self.input_conversations
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
-        for completion, sample in zip(completions, lddl(self.input_batch)):
-            err, results = evaluate_sample(
-                completion, sample["entry_point"], sample["test"], sample["entry_point"]
-            )
-            res.append(
-                {
-                    "response": completion,
-                    "entry_point": sample["entry_point"],
-                }
-            )
+        for i, completions in enumerate(chunk_list(completions, self.n_completions_per_sample)):
+            sample = self.input_batch[i]
+            for j, completion in enumerate(completions):
+                err, results = evaluate_sample(
+                    completion, sample["entry_point"], sample["test"], sample["entry_point"]
+                )
+                res.append(
+                    {
+                        "response": completion,
+                    }
+                )
         return res

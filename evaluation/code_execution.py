@@ -4,10 +4,7 @@ from typing import List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
 
-from transformers.agents.python_interpreter import (
-    LIST_SAFE_MODULES,
-    evaluate_python_code,
-)
+from evaluation.python_interpereter import evaluate_python_code, LIST_SAFE_MODULES
 
 ALLOWED_FNS = {
     range,

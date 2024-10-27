@@ -51,7 +51,7 @@ def main(
     restart: bool = False,
     pairs: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.OPENROUTER,
+    generation_source: GenerationSource = GenerationSource.MOCK,
     task_name: str = "humaneval",
     n_epochs: int = 1,
     **kwargs,
@@ -128,17 +128,17 @@ def main(
         f"Input dataset length: {len(input_dataset)} output: {len(output_dataset)}"
     )
     new_dataset_rows: List[Dict] = []
-    logger.info("Running...")
+    logger.info(f"Generating with model {generation_source.value}")
 
     for _ in range(n_epochs):
         for batch_idx, batch in enumerate(
             tqdm(input_dataset.iter(batch_size=batch_size))
         ):
             batch = cast(Dict, batch)
-            full_conversations_batch = task.format_input_conversation(batch)
+            conversations_batch = task.format_input_conversation(batch)
 
-            logger.info(f"Generating {len(full_conversations_batch)} completions...")
-            completions = asyncio.run(model_wrapper.generate(full_conversations_batch))
+            logger.info(f"Generating {len(conversations_batch)} completions...")
+            completions = asyncio.run(model_wrapper.generate(conversations_batch))
 
             output_rows_batch = task.format_output_rows(completions)
             print_result_dicts(output_rows_batch)

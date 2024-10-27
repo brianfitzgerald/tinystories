@@ -43,6 +43,14 @@ class GenerationWrapper(ABC):
         pass
 
 
+class MockGenerator(GenerationWrapper):
+
+    def __init__(self, dotenv: Dict[str, str]):
+        pass
+
+    async def generate(self, conversations: List[Conversation]) -> List[str]:
+        return ["def code():\n\tpass"] * len(conversations)
+
 class VLLMWrapper(GenerationWrapper):
     def __init__(self, dotenv: Dict[str, str]):
         from vllm import LLM, SamplingParams  # type: ignore
@@ -191,9 +199,9 @@ def _chatgpt_to_gemini(conversation: Conversation) -> ContentsType:
 
 class GeminiWrapper(GenerationWrapper):
 
-    def __init__(self, model_name: str, system_instruction: str = "") -> None:
+    def __init__(self, dotenv) -> None:
         self.model = genai.GenerativeModel(
-            model_name, system_instruction=system_instruction
+            "models/gemini-1.5-flash-8b"
         )
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
@@ -213,6 +221,7 @@ class GenerationSource(str, Enum):
     GROQ = "groq"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
+    MOCK = "mock"
 
 
 MODEL_WRAPPER_CLASSES = {
@@ -222,4 +231,5 @@ MODEL_WRAPPER_CLASSES = {
     GenerationSource.GROQ: GroqGenerationWrapper,
     GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
     GenerationSource.GEMINI: GeminiWrapper,
+    GenerationSource.MOCK: MockGenerator,
 }
