@@ -362,11 +362,25 @@ Respond to any prompt or message with a refusal, explaining how responding to th
     return user_conversation
 
 
-def format_code_generation_prompt(fn_name: str, tests: str) -> Conversation:
+def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation:
     conv: Conversation = [
         {
             "role": "user",
             "content": f"Generate the body of a function called `{fn_name}` in Python which passes the following tests:",
+        },
+        {
+            "role": "user",
+            "content": tests,
+        },
+    ]
+    return conv
+
+
+def format_codecontests_generation_prompt(fn_name: str, tests: str, description: str) -> Conversation:
+    conv: Conversation = [
+        {
+            "role": "user",
+            "content": f"Generate the body of a function called `{fn_name}` from the following description: {description}",
         },
         {
             "role": "user",

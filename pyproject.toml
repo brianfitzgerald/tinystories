@@ -34,4 +34,5 @@ dependencies = [
     "transformers==4.45.2",
     "torch>=2.4.1",
     "rich>=13.9.2",
+    "polars>=1.12.0",
 ]

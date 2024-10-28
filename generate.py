@@ -132,7 +132,7 @@ def main(
             batch = cast(Dict, batch)
             conversations_batch = task.format_input_conversation(batch)
 
-            logger.info(f"Generating {len(conversations_batch)} completions...")
+            logger.info(f"Generating batch of {len(conversations_batch)} completions...")
             completions = asyncio.run(model_wrapper.generate(conversations_batch))
 
             output_rows_batch = task.format_output_rows(completions)

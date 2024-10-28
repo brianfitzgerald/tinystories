@@ -114,7 +114,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 )
                 self.n_retries -= 1
                 if self.n_retries <= 0:
-                    return []
+                    raise e
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
@@ -129,7 +129,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             base_url="https://openrouter.ai/api/v1",
         )
         self.model_name = "google/gemini-flash-1.5"
-        self.max_concurrent = 32
+        self.max_concurrent = 8
         self.temperature = 0.4
 
 

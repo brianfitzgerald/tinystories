@@ -8,8 +8,9 @@ from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
     ENTITY_EXTRACTION_TUNING_INSTRUCTION,
+    format_codecontests_generation_prompt,
     format_dalle_prompt_template,
-    format_code_generation_prompt,
+    format_humaneval_generation_prompt,
     format_entity_extraction_conversation_template,
     get_tool_usage_prompt,
     get_toolformer_dpo_negative_completion_prompt,
@@ -460,13 +461,13 @@ class HumanEval(DPOTask):
     seed_data_format = SeedDataFormat.HF_DATASET
     seed_data_location = "openai/openai_humaneval"
     seed_data_split = "test"
-    output_dataset_name = "humaneval-dpo-pairs"
+    output_dataset_name = "humaneval-dpo"
 
     dataset_columns = ["chosen", "rejected", "id", "prompt"]
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         fn_name, tests = sample["entry_point"], sample["test"]
-        return format_code_generation_prompt(fn_name, tests)
+        return format_humaneval_generation_prompt(fn_name, tests)
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         fn_name, tests = batch["entry_point"], batch["test"]
@@ -475,21 +476,31 @@ class HumanEval(DPOTask):
 
         for f, i in zip(fn_name, tests):
             self.input_conversations.extend(
-                [format_code_generation_prompt(f, i)] * self.n_completions_per_sample
+                [format_humaneval_generation_prompt(f, i)]
+                * self.n_completions_per_sample
             )
         return self.input_conversations
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
-        for i, completions_for_sample in enumerate(chunk_list(completions, self.n_completions_per_sample)):
+        for i, completions_for_sample in enumerate(
+            chunk_list(completions, self.n_completions_per_sample)
+        ):
             sample = self.input_batch[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
-                completion = completion.replace(">>>", "\n").replace("```python", "").replace("```", "")
+                completion = (
+                    completion.replace(">>>", "\n")
+                    .replace("```python", "")
+                    .replace("```", "")
+                )
                 print_code_snippet(completion, self.console)
                 err, results = evaluate_sample(
-                    completion, sample["entry_point"], sample["test"], sample["entry_point"]
+                    completion,
+                    sample["entry_point"],
+                    sample["test"],
+                    sample["entry_point"],
                 )
                 tests_passed = sum(results)
                 if tests_passed > best_score:
@@ -504,7 +515,38 @@ class HumanEval(DPOTask):
                     "rejected": worst_completion,
                     "task_id": sample["task_id"],
                     "error": err,
-                    "prompt": self.input_conversations[i + j]
+                    "prompt": self.input_conversations[i + j],
                 }
             )
         return res
+
+
+class CodeContests(HumanEval):
+
+    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_location = "deepmind/code_contests"
+    seed_data_split = "train"
+    output_dataset_name = "codecontests-dpo"
+
+    dataset_columns = ["chosen", "rejected", "name", "prompt"]
+
+    def _format_tests_as_code(self, tests: Dict[str, str]) -> str:
+        pass
+
+    def format_inference_conversation(self, sample: Dict) -> Conversation:
+        return format_codecontests_generation_prompt(
+            sample["name"],
+            self._format_tests_as_code(sample["tests"]),
+            sample["description"],
+        )
+
+    def format_input_conversation(self, batch: Dict) -> List[Conversation]:
+        self.input_batch = dictl(batch)
+        self.input_conversations = []
+
+        for f, i in zip(fn_name, tests):
+            self.input_conversations.extend(
+                [format_codecontests_generation_prompt(f, i)]
+                * self.n_completions_per_sample
+            )
+        return self.input_conversations
