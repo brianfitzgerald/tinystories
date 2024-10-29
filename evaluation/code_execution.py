@@ -102,28 +102,41 @@ def print_code_snippet(snippet: str, console: Console):
     )
     console.print(formatted_snippet)
 
+ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
+    "typing",
+    "copy",
+    "hashlib",
+    "string",
+    "collections",
+]
 
-def evaluate_sample(sample: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
+def evaluate_sample_humaneval(sample: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
     """
     Evaluate a code snippet against a set of tests.
     Returns an error message and a list of test results.
     """
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
     full_code = sample + solution + tests + "\ncheck()"
-    allowed_imports = LIST_SAFE_MODULES + [
-        "typing",
-        "copy",
-        "hashlib",
-        "string",
-        "collections",
-    ]
     try:
         fn_out = evaluate_python_code(
             full_code,
             ALLOWED_FN_DICT,
-            authorized_imports=allowed_imports,
+            authorized_imports=ALLOWED_IMPORTS,
         )
         return None, fn_out # type: ignore
     except Exception as e:
         traceback.print_exc()
         return str(e), [False] * n_asserts
+
+
+def evaluate_sample_codecontests(sample: str):
+    try:
+        fn_out = evaluate_python_code(
+            sample,
+            ALLOWED_FN_DICT,
+            authorized_imports=ALLOWED_IMPORTS,
+        )
+        return None, fn_out # type: ignore
+    except Exception as e:
+        traceback.print_exc()
+        return str(e), False

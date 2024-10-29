@@ -3,7 +3,7 @@ import sys
 import random
 import traceback
 from typing import Dict, List, Optional
-from evaluation.code_execution import evaluate_sample, print_code_snippet
+from evaluation.code_execution import evaluate_sample_humaneval, print_code_snippet
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
@@ -496,7 +496,7 @@ class HumanEval(DPOTask):
                     .replace("```", "")
                 )
                 print_code_snippet(completion, self.console)
-                err, results = evaluate_sample(
+                err, results = evaluate_sample_humaneval(
                     completion,
                     sample["entry_point"],
                     sample["test"],

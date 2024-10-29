@@ -10,7 +10,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.progress import Progress
 
-from evaluation.code_execution import evaluate_sample, print_code_snippet
+from evaluation.code_execution import evaluate_sample_humaneval, print_code_snippet
 from synthetic_data.generation import GeminiWrapper, GenerationWrapper
 from synthetic_data.tasks import BaseTask, DollyEntityExtraction, HumanEval
 from synthetic_data.utils import Conversation, ldictl
@@ -112,7 +112,7 @@ async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
                     console.print(f"Canonical solution:")
                     print_code_snippet(sample["canonical_solution"], console)
                     generated_code = generated.replace("```", "").replace("python", "")
-                    err, evaluation_results = evaluate_sample(
+                    err, evaluation_results = evaluate_sample_humaneval(
                         sample["prompt"],
                         generated_code,
                         sample["test"],
