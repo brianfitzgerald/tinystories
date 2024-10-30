@@ -1,10 +1,21 @@
 import ast
 import traceback
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
+from typing import Optional, Callable, Dict
+import ast
+import contextlib
+import faulthandler
+import io
+import os
+import multiprocessing
+import platform
+import signal
+import tempfile
 
-from evaluation.python_interpereter import evaluate_python_code, LIST_SAFE_MODULES
+
+from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 
 ALLOWED_FNS = {
     range,
@@ -53,7 +64,9 @@ class AssertToBoolTransformer(ast.NodeTransformer):
         node.body.insert(0, list_init)
         self.generic_visit(node)
 
-        return_stmt = ast.Return(value=ast.Name(id=self.result_list_name, ctx=ast.Load()))
+        return_stmt = ast.Return(
+            value=ast.Name(id=self.result_list_name, ctx=ast.Load())
+        )
         ast.copy_location(return_stmt, node.body[-1])
         node.body.append(return_stmt)
         return node
@@ -102,6 +115,7 @@ def print_code_snippet(snippet: str, console: Console):
     )
     console.print(formatted_snippet)
 
+
 ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
     "typing",
     "copy",
@@ -110,7 +124,10 @@ ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
     "collections",
 ]
 
-def evaluate_sample_humaneval(sample: str, solution: str, tests: str, entrypoint: str) -> Tuple[Optional[str], List]:
+
+def evaluate_sample_humaneval(
+    sample: str, solution: str, tests: str, entrypoint: str
+) -> Tuple[Optional[str], List]:
     """
     Evaluate a code snippet against a set of tests.
     Returns an error message and a list of test results.
@@ -118,25 +135,109 @@ def evaluate_sample_humaneval(sample: str, solution: str, tests: str, entrypoint
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
     full_code = sample + solution + tests + "\ncheck()"
     try:
-        fn_out = evaluate_python_code(
+        fn_out = evaluate_python_code_ast(
             full_code,
             ALLOWED_FN_DICT,
             authorized_imports=ALLOWED_IMPORTS,
         )
-        return None, fn_out # type: ignore
+        return None, fn_out  # type: ignore
     except Exception as e:
         traceback.print_exc()
         return str(e), [False] * n_asserts
 
 
-def evaluate_sample_codecontests(sample: str):
+class WriteOnlyStringIO(io.StringIO):
+    """StringIO that throws an exception when it's read from"""
+
+    def read(self, *args, **kwargs):
+        raise IOError
+
+    def readline(self, *args, **kwargs):
+        raise IOError
+
+    def readlines(self, *args, **kwargs):
+        raise IOError
+
+    def readable(self, *args, **kwargs):
+        """Returns True if the IO object can be read."""
+        return False
+
+
+@contextlib.contextmanager
+def swallow_io():
+    stream = WriteOnlyStringIO()
+    with contextlib.redirect_stdout(stream):
+        with contextlib.redirect_stderr(stream):
+            with redirect_stdin(stream):
+                yield
+
+
+class redirect_stdin(contextlib._RedirectStream):  # type: ignore
+    _stream = "stdin"
+
+
+class TimeoutException(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def time_limit(seconds: float):
+    def signal_handler(signum, frame):
+        raise TimeoutException("Timed out!")
+
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    signal.signal(signal.SIGALRM, signal_handler)
     try:
-        fn_out = evaluate_python_code(
-            sample,
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+
+
+def evaluate_python_code_exec(
+    code_to_run: str, timeout: float, completion_id: Optional[int] = None
+) -> Dict:
+
+    def unsafe_execute():
+        try:
+            exec_globals = {}
+            with swallow_io():
+                with time_limit(timeout):
+                    exec(code_to_run, exec_globals)
+            result.append("passed")
+        except TimeoutException:
+            result.append("timed out")
+        except BaseException as e:
+            result.append(f"failed: {e}")
+
+    manager = multiprocessing.Manager()
+    result = manager.list()
+
+    p = multiprocessing.Process(target=unsafe_execute)
+    p.start()
+    p.join(timeout=timeout + 1)
+    if p.is_alive():
+        p.kill()
+
+    if not result:
+        result.append("timed out")
+
+    return dict(
+        passed=result[0] == "passed",
+        result=result[0],
+        completion_id=completion_id,
+    )
+
+
+def evaluate_sample_codecontests(
+    code_to_run: str, input_fn: Callable
+) -> Tuple[Optional[str], List]:
+    try:
+        fn_out = evaluate_python_code_ast(
+            code_to_run,
             ALLOWED_FN_DICT,
             authorized_imports=ALLOWED_IMPORTS,
+            custom_tools={"input": input_fn},
         )
-        return None, fn_out # type: ignore
+        return None, fn_out  # type: ignore
     except Exception as e:
-        traceback.print_exc()
-        return str(e), False
+        return str(e), []

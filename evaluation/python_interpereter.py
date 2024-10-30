@@ -819,7 +819,7 @@ def evaluate_ast(
         raise InterpreterError(f"{expression.__class__.__name__} is not supported.")
 
 
-def evaluate_python_code(
+def evaluate_python_code_ast(
     code: str,
     static_tools: Optional[Dict[str, Callable]] = None,
     custom_tools: Optional[Dict[str, Callable]] = None,
