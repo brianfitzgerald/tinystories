@@ -194,38 +194,38 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, timeout: float, completion_id: Optional[int] = None
-) -> Dict:
+    code_to_run: str, test_inputs: str, timeout: float = 1000
+):
 
-    def unsafe_execute():
-        try:
-            exec_globals = {}
-            with swallow_io():
-                with time_limit(timeout):
-                    exec(code_to_run, exec_globals)
-            result.append("passed")
-        except TimeoutException:
-            result.append("timed out")
-        except BaseException as e:
-            result.append(f"failed: {e}")
+    result = []
+    inputs_idx = 0
+    input_values = test_inputs.split("\n")
 
-    manager = multiprocessing.Manager()
-    result = manager.list()
+    def _retrieve_input():
+        nonlocal inputs_idx
+        out = input_values[inputs_idx]
+        inputs_idx += 1
+        return out
 
-    p = multiprocessing.Process(target=unsafe_execute)
-    p.start()
-    p.join(timeout=timeout + 1)
-    if p.is_alive():
-        p.kill()
+    try:
+        exec_globals = {
+            "input": _retrieve_input,
+            "exit": lambda: None,
+        }
+        with swallow_io():
+            with time_limit(timeout):
+                exec(code_to_run, exec_globals)
+        result.append("passed")
+    except TimeoutException:
+        result.append("timed out")
+    except Exception as e:
+        traceback.print_exc()
+        result.append(str(e))
 
     if not result:
         result.append("timed out")
 
-    return dict(
-        passed=result[0] == "passed",
-        result=result[0],
-        completion_id=completion_id,
-    )
+    return result
 
 
 def evaluate_sample_codecontests(
