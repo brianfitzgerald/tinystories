@@ -201,16 +201,21 @@ def evaluate_python_code_exec(
     inputs_idx = 0
     input_values = test_inputs.split("\n")
 
-    def _retrieve_input():
+    def _retrieve_input(value=None):
+        print(value)
         nonlocal inputs_idx
         out = input_values[inputs_idx]
         inputs_idx += 1
         return out
 
+    def _exit(value=None):
+        print(value)
+        return
+
     try:
         exec_globals = {
             "input": _retrieve_input,
-            "exit": lambda: None,
+            "exit": _exit,
         }
         with swallow_io():
             with time_limit(timeout):
@@ -220,6 +225,7 @@ def evaluate_python_code_exec(
         result.append("timed out")
     except Exception as e:
         traceback.print_exc()
+        print(e)
         result.append(str(e))
 
     if not result:
