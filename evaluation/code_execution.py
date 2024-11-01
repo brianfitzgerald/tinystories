@@ -194,12 +194,12 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, timeout: float = 1000
+    code_to_run: str, timeout: float = 1000
 ):
 
     result = []
     inputs_idx = 0
-    input_values = test_inputs.split("\n")
+    input_values = []
 
     def _retrieve_input(value=None):
         nonlocal inputs_idx
@@ -217,7 +217,7 @@ def evaluate_python_code_exec(
         }
         with swallow_io():
             with time_limit(timeout):
-                exec(code_to_run, exec_globals)
+                out = exec(code_to_run, exec_globals)
         result.append("passed")
     except TimeoutException:
         result.append("timed out")
