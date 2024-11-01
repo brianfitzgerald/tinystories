@@ -376,15 +376,11 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
     return conv
 
 
-def format_codecontests_generation_prompt(fn_name: str, tests: str, description: str) -> Conversation:
+def format_codecontests_generation_prompt(description: str) -> Conversation:
     conv: Conversation = [
         {
             "role": "user",
-            "content": f"Generate the body of a function called `{fn_name}` from the following description: {description}",
-        },
-        {
-            "role": "user",
-            "content": tests,
+            "content": f"Generate code to solve the following problem. {description}",
         },
     ]
     return conv

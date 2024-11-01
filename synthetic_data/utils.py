@@ -69,6 +69,7 @@ class SeedDataFormat(Enum):
     HF_DATASET = "hf_dataset"
     # Synthetic means the data is generated from a synthetic source, so no initial data is loaded
     SYNTHETIC = "synthetic"
+    PARQUET = "parquet"
 
 
 def clean_message(message: JSONSchemaKey):

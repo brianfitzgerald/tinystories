@@ -3,7 +3,7 @@ import sys
 import random
 import traceback
 from typing import Dict, List, Optional
-from evaluation.code_execution import evaluate_sample_humaneval, print_code_snippet
+from evaluation.code_execution import evaluate_python_code_exec, evaluate_sample_humaneval, print_code_snippet
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from datasets import Dataset
 from loguru import logger
 from rich.console import Console
+from dataclasses import dataclass
 
 from synthetic_data.utils import (
     Conversation,
@@ -521,10 +522,22 @@ class HumanEval(DPOTask):
         return res
 
 
+@dataclass
+class CodeforcesProblem:
+    source: int
+    difficulty: int
+    name: str
+    description: str
+    public_tests: Dict[str, List[str]]
+    private_tests: Dict[str, List[str]]
+    cf_rating: int
+    cf_points: float
+
+
 class CodeContests(HumanEval):
 
-    seed_data_format = SeedDataFormat.HF_DATASET
-    seed_data_location = "deepmind/code_contests"
+    seed_data_format = SeedDataFormat.PARQUET
+    seed_data_location = "dataset_samples/codeforces_problems_subset.parquet"
     seed_data_split = "train"
     output_dataset_name = "codecontests-dpo"
 
@@ -542,11 +555,50 @@ class CodeContests(HumanEval):
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         self.input_batch = dictl(batch)
+        samples = [CodeforcesProblem(**row) for row in self.input_batch]
         self.input_conversations = []
 
-        for f, i in zip(fn_name, tests):
+        for i, sample in enumerate(samples):
             self.input_conversations.extend(
-                [format_codecontests_generation_prompt(f, i)]
+                [format_codecontests_generation_prompt(sample.description)]
                 * self.n_completions_per_sample
             )
         return self.input_conversations
+
+
+    def format_output_rows(self, completions: List[str]) -> List[Dict]:
+        res = []
+        for i, completions_for_sample in enumerate(
+            chunk_list(completions, self.n_completions_per_sample)
+        ):
+            sample = self.input_batch[i]
+            best_completion, best_score = None, 0
+            worst_completion, worst_score = None, sys.maxsize
+            for j, completion in enumerate(completions_for_sample):
+                completion = (
+                    completion.replace(">>>", "\n")
+                    .replace("```python", "")
+                    .replace("```", "")
+                )
+                print_code_snippet(completion, self.console)
+                err, results = evaluate_python_code_exec(
+                    completion,
+                    sample["test"],
+                )
+                tests_passed = sum(results)
+                if tests_passed > best_score:
+                    best_score = tests_passed
+                    best_completion = completion
+                if tests_passed < worst_score:
+                    worst_score = tests_passed
+                    worst_completion = completion
+            res.append(
+                {
+                    "chosen": best_completion,
+                    "rejected": worst_completion,
+                    "task_id": sample["task_id"],
+                    "error": err,
+                    "prompt": self.input_conversations[i + j],
+                }
+            )
+        return res

@@ -12,6 +12,7 @@ from dotenv import dotenv_values
 from huggingface_hub import login
 from tqdm import tqdm
 from synthetic_data.tasks import (
+    CodeContests,
     DPOTask,
     Goody2,
     PromptUpsample,
@@ -42,6 +43,7 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
     "dolly_entity_extraction": DollyEntityExtraction,
     "goody": Goody2,
     "humaneval": HumanEval,
+    "codecontests": CodeContests,
 }
 
 
@@ -52,7 +54,7 @@ def main(
     restart: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENROUTER,
-    task_name: str = "humaneval",
+    task_name: str = "codecontests",
     n_epochs: int = 1,
     **kwargs,
 ):
@@ -95,18 +97,14 @@ def main(
 
     input_dataset: Dataset
     input_dataset_location: Optional[str] = None
-    if task.seed_data_format == SeedDataFormat.HF_DATASET:
-        input_dataset_location = task.seed_data_location
-    elif task.seed_data_format == SeedDataFormat.TSV:
+    if task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.PARQUET, SeedDataFormat.TSV):
         input_dataset_location = task.seed_data_location
 
     logger.info(
         f"Loading input dataset: {input_dataset_location}, format: {task.seed_data_format.value}"
     )
     assert input_dataset_location
-    if (
-        task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.SYNTHETIC)
-    ):
+    if task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.SYNTHETIC):
         if len(output_dataset) > 0 and resume_input_position:
             logger.info(f"Resuming from position {len(output_dataset)}")
             split = f"{split}[{len(output_dataset)}:]"
@@ -114,6 +112,8 @@ def main(
     elif task.seed_data_format == SeedDataFormat.TSV:
         seed_data = pd.read_csv(input_dataset_location, on_bad_lines="skip")
         input_dataset = Dataset.from_pandas(seed_data)
+    elif task.seed_data_format == SeedDataFormat.PARQUET:
+        input_dataset = Dataset.from_parquet(input_dataset_location)  # type: ignore
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
 
@@ -132,7 +132,9 @@ def main(
             batch = cast(Dict, batch)
             conversations_batch = task.format_input_conversation(batch)
 
-            logger.info(f"Generating batch of {len(conversations_batch)} completions...")
+            logger.info(
+                f"Generating batch of {len(conversations_batch)} completions..."
+            )
             completions = asyncio.run(model_wrapper.generate(conversations_batch))
 
             output_rows_batch = task.format_output_rows(completions)
