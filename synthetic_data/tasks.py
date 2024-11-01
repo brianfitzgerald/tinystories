@@ -543,6 +543,10 @@ class CodeContests(HumanEval):
 
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
+    def __init__(self, console) -> None:
+        super().__init__(console)
+        self.n_completions_per_sample = 1
+
     def _format_tests_as_code(self, tests: Dict[str, str]) -> str:
         pass
 
@@ -554,11 +558,11 @@ class CodeContests(HumanEval):
         )
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
-        self.input_batch = dictl(batch)
-        samples = [CodeforcesProblem(**row) for row in self.input_batch]
+        input_batch = dictl(batch)
+        self.samples = [CodeforcesProblem(**row) for row in input_batch]
         self.input_conversations = []
 
-        for i, sample in enumerate(samples):
+        for i, sample in enumerate(self.samples):
             self.input_conversations.extend(
                 [format_codecontests_generation_prompt(sample.description)]
                 * self.n_completions_per_sample
@@ -571,7 +575,7 @@ class CodeContests(HumanEval):
         for i, completions_for_sample in enumerate(
             chunk_list(completions, self.n_completions_per_sample)
         ):
-            sample = self.input_batch[i]
+            sample = self.samples[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
@@ -581,10 +585,11 @@ class CodeContests(HumanEval):
                     .replace("```", "")
                 )
                 print_code_snippet(completion, self.console)
-                err, results = evaluate_python_code_exec(
-                    completion,
-                    sample["test"],
-                )
+                for test in sample.public_tests.items():
+                    err, results = evaluate_python_code_exec(
+                        completion,
+                        test['input'],
+                    )
                 tests_passed = sum(results)
                 if tests_passed > best_score:
                     best_score = tests_passed

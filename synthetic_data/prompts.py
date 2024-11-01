@@ -380,7 +380,7 @@ def format_codecontests_generation_prompt(description: str) -> Conversation:
     conv: Conversation = [
         {
             "role": "user",
-            "content": f"Generate code to solve the following problem. {description}",
+            "content": f"Generate code to solve the following problem. {description} The function's signature is:\n```python\ndef solution(problem_input):\n```",
         },
     ]
     return conv

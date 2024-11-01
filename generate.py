@@ -50,7 +50,7 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
 def main(
     # n batches
     upload_every: int = 10,
-    batch_size: int = 8,
+    batch_size: int = 4,
     restart: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENROUTER,
