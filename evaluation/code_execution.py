@@ -1,6 +1,6 @@
 import ast
 import traceback
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
 from typing import Optional, Callable, Dict
@@ -194,12 +194,15 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, timeout: float = 1000
-):
+    code_to_run: str, test_inputs: str, timeout: float = 1000
+) -> Tuple[Optional[str], Any]:
 
     result = []
     inputs_idx = 0
     input_values = []
+
+    test_inputs_list = test_inputs.strip().split("\n")
+    code_to_run = code_to_run + f"\nresult = solution({test_inputs_list})"
 
     def _retrieve_input(value=None):
         nonlocal inputs_idx
@@ -210,6 +213,8 @@ def evaluate_python_code_exec(
     def _exit(value=None):
         return
 
+    local_vars = {}
+
     try:
         exec_globals = {
             "input": _retrieve_input,
@@ -217,17 +222,13 @@ def evaluate_python_code_exec(
         }
         with swallow_io():
             with time_limit(timeout):
-                out = exec(code_to_run, exec_globals)
-        result.append("passed")
+                exec(code_to_run, exec_globals, local_vars)
+        output = local_vars.get("result")
+        return None, output
     except TimeoutException:
-        result.append("timed out")
+        return "timed out", None
     except Exception as e:
-        result.append(str(e))
-
-    if not result:
-        result.append("timed out")
-
-    return result
+        return str(e), None
 
 
 def evaluate_sample_codecontests(
