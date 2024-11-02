@@ -43,13 +43,18 @@ class GenerationWrapper(ABC):
         pass
 
 
+MOCK_SNIPPET = """
+def solution(problem_input):
+    return []
+"""
+
 class MockGenerator(GenerationWrapper):
 
     def __init__(self, dotenv: Dict[str, str]):
         pass
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
-        return ["def code():\n\tpass"] * len(conversations)
+        return [MOCK_SNIPPET] * len(conversations)
 
 
 class VLLMWrapper(GenerationWrapper):

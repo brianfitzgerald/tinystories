@@ -3,7 +3,11 @@ import sys
 import random
 import traceback
 from typing import Dict, List, Optional
-from evaluation.code_execution import evaluate_python_code_exec, evaluate_sample_humaneval, print_code_snippet
+from evaluation.code_execution import (
+    evaluate_python_code_exec,
+    evaluate_sample_humaneval,
+    print_code_snippet,
+)
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
@@ -528,8 +532,8 @@ class CodeforcesProblem:
     difficulty: int
     name: str
     description: str
-    public_tests: Dict[str, List[str]]
-    private_tests: Dict[str, List[str]]
+    public_tests: Dict
+    private_tests: Dict
     cf_rating: int
     cf_points: float
 
@@ -547,14 +551,10 @@ class CodeContests(HumanEval):
         super().__init__(console)
         self.n_completions_per_sample = 1
 
-    def _format_tests_as_code(self, tests: Dict[str, str]) -> str:
-        pass
-
     def format_inference_conversation(self, sample: Dict) -> Conversation:
+        sample_dc = CodeforcesProblem(**sample)
         return format_codecontests_generation_prompt(
-            sample["name"],
-            self._format_tests_as_code(sample["tests"]),
-            sample["description"],
+            sample_dc.description,
         )
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
@@ -568,7 +568,6 @@ class CodeContests(HumanEval):
                 * self.n_completions_per_sample
             )
         return self.input_conversations
-
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
         res = []
@@ -585,23 +584,37 @@ class CodeContests(HumanEval):
                     .replace("```", "")
                 )
                 print_code_snippet(completion, self.console)
-                for test in sample.public_tests.items():
-                    err, results = evaluate_python_code_exec(
-                        completion,
-                        test['input'],
+                completion_test_results = []
+                for test_input, test_output in zip(
+                    sample.public_tests["input"], sample.public_tests["output"]
+                ):
+                    err, test_case_execution_results = evaluate_python_code_exec(
+                        completion, test_input
                     )
-                tests_passed = sum(results)
-                if tests_passed > best_score:
-                    best_score = tests_passed
+                    test_case_expected_results = test_output.strip().split("\n")
+                    if not isinstance(test_case_execution_results, list) or len(
+                        test_case_execution_results
+                    ) != len(test_case_expected_results):
+                        completion_test_results.extend(
+                            [False] * len(test_case_expected_results)
+                        )
+                    else:
+                        for expected, actual in zip(
+                            test_case_expected_results, test_case_execution_results
+                        ):
+                            completion_test_results.append(str(expected) == str(actual))
+                n_tests_passed = sum(completion_test_results)
+                if n_tests_passed > best_score:
+                    best_score = n_tests_passed
                     best_completion = completion
-                if tests_passed < worst_score:
-                    worst_score = tests_passed
+                if n_tests_passed < worst_score:
+                    worst_score = n_tests_passed
                     worst_completion = completion
             res.append(
                 {
                     "chosen": best_completion,
                     "rejected": worst_completion,
-                    "task_id": sample["task_id"],
+                    "name": sample.name,
                     "error": err,
                     "prompt": self.input_conversations[i + j],
                 }
