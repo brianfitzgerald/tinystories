@@ -549,7 +549,7 @@ class CodeContests(HumanEval):
 
     def __init__(self, console) -> None:
         super().__init__(console)
-        self.n_completions_per_sample = 1
+        self.n_completions_per_sample = 4
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         sample_dc = CodeforcesProblem(**sample)
@@ -584,41 +584,59 @@ class CodeContests(HumanEval):
                     .replace("```", "")
                 )
                 print_code_snippet(completion, self.console)
-                completion_test_results = []
-                for test_input, test_output in zip(
+                test_results_for_completion = []
+                for test_input, expected_test_output in zip(
                     sample.public_tests["input"], sample.public_tests["output"]
                 ):
+                    expected_test_output = expected_test_output.strip().split("\n")
                     err, test_case_execution_results = evaluate_python_code_exec(
                         completion, test_input
                     )
-                    test_case_expected_results = test_output.strip().split("\n")
+                    if len(expected_test_output) == 1 and isinstance(
+                        test_case_execution_results, str
+                    ):
+                        test_case_execution_results = [
+                            test_case_execution_results.strip()
+                        ]
+                    if isinstance(test_case_execution_results, str):
+                        test_case_execution_results = (
+                            test_case_execution_results.strip().split("\n")
+                        )
                     if not isinstance(test_case_execution_results, list) or len(
                         test_case_execution_results
-                    ) != len(test_case_expected_results):
-                        completion_test_results.append(
-                            [False] * len(test_case_expected_results)
+                    ) != len(expected_test_output):
+                        test_results_for_completion.append(
+                            [False] * len(expected_test_output)
                         )
                     else:
                         test_case_results = []
                         for expected, actual in zip(
-                            test_case_expected_results, test_case_execution_results
+                            expected_test_output, test_case_execution_results
                         ):
                             test_case_results.append(str(expected) == str(actual))
-                        completion_test_results.append(test_case_results)
-                n_tests_passed = sum(flatten_list(completion_test_results))
+                        test_results_for_completion.append(test_case_results)
+                n_tests_passed = sum(flatten_list(test_results_for_completion))
                 if n_tests_passed > best_score:
                     best_score = n_tests_passed
                     best_completion = completion
                 if n_tests_passed < worst_score:
                     worst_score = n_tests_passed
                     worst_completion = completion
+            if (
+                best_completion is None
+                or worst_completion is None
+                or worst_score == best_score
+            ):
+                continue
             res.append(
                 {
                     "chosen": best_completion,
+                    "chosen_score": best_score,
                     "rejected": worst_completion,
+                    "rejected_score": worst_score,
                     "name": sample.name,
                     "error": err,
-                    "prompt": self.input_conversations[i + j],
+                    "description": sample.description,
                 }
             )
         return res
