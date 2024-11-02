@@ -235,3 +235,13 @@ def dictl(dict_of_lists):
 def chunk_list(xs: List, n: int):
     n = max(1, n)
     return (xs[i:i+n] for i in range(0, len(xs), n))
+
+
+def flatten_list(lst):
+    flat_list = []
+    for item in lst:
+        if isinstance(item, list):
+            flat_list.extend(flatten_list(item))  # Recursively flatten sublists
+        else:
+            flat_list.append(item)
+    return flat_list

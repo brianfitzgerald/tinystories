@@ -2,7 +2,7 @@ from abc import ABC
 import sys
 import random
 import traceback
-from typing import Dict, List, Optional
+from typing import Dict, List
 from evaluation.code_execution import (
     evaluate_python_code_exec,
     evaluate_sample_humaneval,
@@ -44,10 +44,10 @@ from synthetic_data.utils import (
     chunk_list,
     dictl,
     extract_json_code_blocks,
+    flatten_list,
     is_valid_python,
     clean_message,
     get_matches,
-    ldictl,
 )
 
 
@@ -595,15 +595,17 @@ class CodeContests(HumanEval):
                     if not isinstance(test_case_execution_results, list) or len(
                         test_case_execution_results
                     ) != len(test_case_expected_results):
-                        completion_test_results.extend(
+                        completion_test_results.append(
                             [False] * len(test_case_expected_results)
                         )
                     else:
+                        test_case_results = []
                         for expected, actual in zip(
                             test_case_expected_results, test_case_execution_results
                         ):
-                            completion_test_results.append(str(expected) == str(actual))
-                n_tests_passed = sum(completion_test_results)
+                            test_case_results.append(str(expected) == str(actual))
+                        completion_test_results.append(test_case_results)
+                n_tests_passed = sum(flatten_list(completion_test_results))
                 if n_tests_passed > best_score:
                     best_score = n_tests_passed
                     best_completion = completion

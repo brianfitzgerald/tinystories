@@ -3,16 +3,11 @@ import traceback
 from typing import Any, Callable, List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable
 import ast
 import contextlib
-import faulthandler
 import io
-import os
-import multiprocessing
-import platform
 import signal
-import tempfile
 
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
