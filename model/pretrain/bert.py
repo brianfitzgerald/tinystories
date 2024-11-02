@@ -357,8 +357,14 @@ class SimpleBertForMaskedLM(SmModel):
             },
         }
 
+
 # copied from cramming/data/tokenizer_preparation.py in cramming-bert
-def get_sane_normalizers(force_english_keyboard=False, force_lowercase=False, strip_accents=False, sanity=False):
+def get_sane_normalizers(
+    force_english_keyboard=False,
+    force_lowercase=False,
+    strip_accents=False,
+    sanity=False,
+):
     """original rules as in XLNET with optional modifications. force_english_keyboard is actually an ascii normalization."""
     if sanity:
         return normalizers.BertNormalizer(lowercase=force_lowercase)
@@ -372,6 +378,7 @@ def get_sane_normalizers(force_english_keyboard=False, force_lowercase=False, st
         normalize_ops.append(normalizers.StripAccents())
     normalize_ops.append(normalizers.Replace(Regex(" {2,}"), " "))
     if force_english_keyboard:
-        normalize_ops.append(normalizers.Replace(Regex(r"[^\x00-\x7F]+"), ""))  # start from 00 instead of 1F to include tab
-    return normalizers.Sequence(normalize_ops) # type: ignore
-
+        normalize_ops.append(
+            normalizers.Replace(Regex(r"[^\x00-\x7F]+"), "")
+        )  # start from 00 instead of 1F to include tab
+    return normalizers.Sequence(normalize_ops)  # type: ignore

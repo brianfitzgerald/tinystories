@@ -22,6 +22,7 @@ def generate_full_prompt(instruction: str, prompt: str) -> str:
         f"### Instruction:\n{instruction}\n\n### Input:\n{prompt}\n\n### Response:"
     )
 
+
 def filter_rows(row: Dict, cols: List[str]) -> bool:
     prompt, upsampled = row["Prompt"], row["Upsampled"]
     if len(prompt) == 0 or len(upsampled) == 0:

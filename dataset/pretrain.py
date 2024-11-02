@@ -204,7 +204,6 @@ class TinyStoriesDataset(SmDataset):
             return_tensors="pt",
         )
 
-
         return {
             "input_ids": inputs_tokenized["input_ids"],
             "labels": inputs_tokenized["input_ids"],

@@ -50,7 +50,6 @@ def solution(problem_input):
 
 
 class MockGenerator(GenerationWrapper):
-
     def __init__(self, dotenv: Dict[str, str]):
         pass
 
@@ -207,7 +206,6 @@ def _chatgpt_to_gemini(conversation: Conversation) -> ContentsType:
 
 
 class GeminiWrapper(GenerationWrapper):
-
     def __init__(self, dotenv) -> None:
         self.model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
 

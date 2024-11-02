@@ -56,9 +56,9 @@ CONFIGS = {
             depth=6,
             n_heads=8,
             mlp_dim=512,
-            dropout=0.1
+            dropout=0.1,
         ),
-    )
+    ),
 }
 
 

@@ -71,7 +71,9 @@ class T5FineTuner(SmModel):
         )
         self.log(
             f"{split}_precision",
-            precision(outputs.logits, outputs.labels, average="macro", task="multiclass"),
+            precision(
+                outputs.logits, outputs.labels, average="macro", task="multiclass"
+            ),
             on_step=True,
             on_epoch=True,
             logger=True,
@@ -85,7 +87,9 @@ class T5FineTuner(SmModel):
         )
         self.log(
             f"{split}_f1",
-            f1_score(outputs.logits, outputs.labels, average="macro", task="multiclass"),
+            f1_score(
+                outputs.logits, outputs.labels, average="macro", task="multiclass"
+            ),
             on_step=True,
             on_epoch=True,
             logger=True,

@@ -24,7 +24,11 @@ from lightning.pytorch.loggers import CSVLogger, WandbLogger
 
 logger.info("Loading dependencies - Project...")
 from dataset.function_calling import FunctionCallingDataModule
-from dataset.squad import SquadExtractiveQADataModule, SquadDataModule, DollyEntityExtractionDataModule
+from dataset.squad import (
+    SquadExtractiveQADataModule,
+    SquadDataModule,
+    DollyEntityExtractionDataModule,
+)
 from dataset.parti import PromptUpsampleDataModule
 from dataset.pretrain import BertPretrainDataset, TinyStoriesDataset
 from model.callbacks import (
@@ -147,16 +151,13 @@ CONFIGS = {
     # https://huggingface.co/blog/smollm
     # https://github.com/huggingface/alignment-handbook/blob/main/recipes/zephyr-7b-gemma/sft/config_full.yaml
     "smol_squad": ModelConfig(
-        AutoLMFineTuner,
-        SquadDataModule,
-        "smollm-1.7b-squad",
-        SMOL_LM_HPARAMS
+        AutoLMFineTuner, SquadDataModule, "smollm-1.7b-squad", SMOL_LM_HPARAMS
     ),
     "smol_dolly": ModelConfig(
         AutoLMFineTuner,
         DollyEntityExtractionDataModule,
         "phi-dolly-ie",
-        SMOL_LM_HPARAMS
+        SMOL_LM_HPARAMS,
     ),
 }
 

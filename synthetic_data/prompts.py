@@ -1,6 +1,8 @@
 from synthetic_data.generation import Conversation
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
 
 
 def format_dalle_prompt_template(user_prompt: str) -> Conversation:
@@ -62,6 +64,7 @@ ENTITY_EXTRACTION_TUNING_INSTRUCTION = """
 Extract structured data from the following context in JSON form.
 """
 
+
 def format_entity_extraction_conversation_template(context: str) -> Conversation:
     """
     Prepares the system and user-assistant style messages for inference.
@@ -70,7 +73,10 @@ def format_entity_extraction_conversation_template(context: str) -> Conversation
     https://rajpurkar.github.io/SQuAD-explorer/
     """
 
-    prompt = f"{ENTITY_EXTRACTION_EXAMPLE_GENERATION_INSTRUCTION}<context>\n{context}\n</context>" ""
+    prompt = (
+        f"{ENTITY_EXTRACTION_EXAMPLE_GENERATION_INSTRUCTION}<context>\n{context}\n</context>"
+        ""
+    )
 
     user_message: ChatCompletionMessageParam = {
         "role": "user",

@@ -97,7 +97,11 @@ def main(
 
     input_dataset: Dataset
     input_dataset_location: Optional[str] = None
-    if task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.PARQUET, SeedDataFormat.TSV):
+    if task.seed_data_format in (
+        SeedDataFormat.HF_DATASET,
+        SeedDataFormat.PARQUET,
+        SeedDataFormat.TSV,
+    ):
         input_dataset_location = task.seed_data_location
 
     logger.info(

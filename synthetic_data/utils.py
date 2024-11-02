@@ -226,15 +226,17 @@ def ldictl(dict_of_lists):
     """
     return [dict(zip(dict_of_lists, t)) for t in zip(*dict_of_lists.values())]
 
+
 def dictl(dict_of_lists):
     """
     Dict of lists to list of dicts.
     """
     return [dict(zip(dict_of_lists.keys(), t)) for t in zip(*dict_of_lists.values())]
 
+
 def chunk_list(xs: List, n: int):
     n = max(1, n)
-    return (xs[i:i+n] for i in range(0, len(xs), n))
+    return (xs[i : i + n] for i in range(0, len(xs), n))
 
 
 def flatten_list(lst):

@@ -155,9 +155,7 @@ class SmDataset(pl.LightningDataModule):
 
 
 class SmModel(pl.LightningModule):
-    def __init__(
-        self, hparams: LMHyperParams, tokenizer: PreTrainedTokenizer
-    ) -> None:
+    def __init__(self, hparams: LMHyperParams, tokenizer: PreTrainedTokenizer) -> None:
         super().__init__()
         self.params = hparams
         self.tokenizer = tokenizer

@@ -26,7 +26,6 @@ class EncodedBatch(TypedDict):
 
 
 class ContextPooler(nn.Module):
-
     def __init__(self, hidden_size: int, pooler_dropout: float = 0):
         super(ContextPooler, self).__init__()
         self.dense = nn.Linear(hidden_size, hidden_size)
@@ -45,7 +44,6 @@ class ContextPooler(nn.Module):
 
 
 class SequenceRanker(nn.Module):
-
     def __init__(
         self,
         pooler_hidden_size: int,

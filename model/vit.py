@@ -211,7 +211,6 @@ class ViT(nn.Module):
 
 
 class VisionTransformer(pl.LightningModule):
-
     def __init__(self, params: VitHParams, dataset: VitDataset):
         super().__init__()
 

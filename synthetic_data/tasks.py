@@ -458,7 +458,6 @@ class Goody2(BaseTask):
 
 
 class HumanEval(DPOTask):
-
     def __init__(self, console) -> None:
         super().__init__(console)
         self.n_completions_per_sample = 4

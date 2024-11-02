@@ -17,7 +17,9 @@ COLUMNS = [
 
 def main():
 
-    out_wds = wds.ShardWriter("/weka/home-brianf/imagereward_cache/shard-%06d.tar", maxcount=1000)
+    out_wds = wds.ShardWriter(
+        "/weka/home-brianf/imagereward_cache/shard-%06d.tar", maxcount=1000
+    )
 
     # ImageReward
 
