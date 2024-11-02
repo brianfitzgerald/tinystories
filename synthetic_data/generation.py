@@ -48,6 +48,7 @@ def solution(problem_input):
     return []
 """
 
+
 class MockGenerator(GenerationWrapper):
 
     def __init__(self, dotenv: Dict[str, str]):
