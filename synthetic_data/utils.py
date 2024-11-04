@@ -210,6 +210,15 @@ def extract_json_code_blocks(msg: str) -> List[JSONSchema]:
     return res
 
 
+
+
+def extract_code_block(msg: str, language: str = "python") -> List[str]:
+    match_pattern = fr"```(?:{language})?\n(.*?)\n```"
+    blocks = re.findall(match_pattern, msg, re.DOTALL)
+    return blocks
+
+
+
 async def gather_with_concurrency_limit(n: int, *coros):
     semaphore = asyncio.Semaphore(n)
 

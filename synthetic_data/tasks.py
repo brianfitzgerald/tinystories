@@ -43,7 +43,7 @@ from synthetic_data.utils import (
     ExtractiveQARow,
     chunk_list,
     dictl,
-    extract_json_code_blocks,
+    extract_code_block,
     flatten_list,
     is_valid_python,
     clean_message,
@@ -382,7 +382,7 @@ class SquadExtractiveQA(BaseTask):
     def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
         parsed_rows: List[ExtractiveQARow] = []
         for i, completion in enumerate(completions_batch):
-            blocks = extract_json_code_blocks(completion)
+            blocks = extract_code_block(completion)
             if len(blocks) != 2:
                 logger.warning(f"Could not extract JSON from completion: {completion}")
                 continue
@@ -539,8 +539,8 @@ class CodeforcesProblem:
 
 class CodeContests(HumanEval):
 
-    seed_data_format = SeedDataFormat.PARQUET
-    seed_data_location = "dataset_samples/codeforces_problems_subset.parquet"
+    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_location = "roborovski/codeforces_problems_subset"
     seed_data_split = "train"
     output_dataset_name = "codecontests-dpo"
 
@@ -548,7 +548,7 @@ class CodeContests(HumanEval):
 
     def __init__(self, console) -> None:
         super().__init__(console)
-        self.n_completions_per_sample = 4
+        self.n_completions_per_sample = 2
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         sample_dc = CodeforcesProblem(**sample)
@@ -577,11 +577,15 @@ class CodeContests(HumanEval):
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
-                completion = (
-                    completion.replace(">>>", "\n")
-                    .replace("```python", "")
-                    .replace("```", "")
-                )
+                code_snippets = extract_code_block(completion, "python")
+                completion = code_snippets[0]
+                if len(code_snippets) == 0:
+                    logger.error(f"No code snippet found for completion {i}")
+                    continue
+                if len(code_snippets) != 1:
+                    logger.warning(
+                        f"Has more than one code snippet: {code_snippets} for completion {i}"
+                    )
                 print_code_snippet(completion, self.console)
                 test_results_for_completion = []
                 for test_input, expected_test_output in zip(
@@ -604,6 +608,9 @@ class CodeContests(HumanEval):
                     if not isinstance(test_case_execution_results, list) or len(
                         test_case_execution_results
                     ) != len(expected_test_output):
+                        logger.info(
+                            f"Error in test case execution - error: {err}, results: {test_case_execution_results}"
+                        )
                         test_results_for_completion.append(
                             [False] * len(expected_test_output)
                         )
@@ -615,6 +622,9 @@ class CodeContests(HumanEval):
                             test_case_results.append(str(expected) == str(actual))
                         test_results_for_completion.append(test_case_results)
                 n_tests_passed = sum(flatten_list(test_results_for_completion))
+                logger.info(
+                    f"Tests passed for completion {i}: {n_tests_passed} / {len(test_results_for_completion)}"
+                )
                 if n_tests_passed > best_score:
                     best_score = n_tests_passed
                     best_completion = completion

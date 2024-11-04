@@ -28,6 +28,7 @@ from synthetic_data.generation import (
     MODEL_WRAPPER_CLASSES,
     GenerationWrapper,
     GenerationSource,
+    MockGenerator,
     upload_dataset,
 )
 from synthetic_data.utils import (
@@ -50,10 +51,10 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
 def main(
     # n batches
     upload_every: int = 10,
-    batch_size: int = 4,
+    batch_size: int = 2,
     restart: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.OPENROUTER,
+    generation_source: GenerationSource = GenerationSource.OPENAI,
     task_name: str = "codecontests",
     n_epochs: int = 1,
     **kwargs,
@@ -135,6 +136,14 @@ def main(
         ):
             batch = cast(Dict, batch)
             conversations_batch = task.format_input_conversation(batch)
+
+            if isinstance(task, CodeContests) and isinstance(model_wrapper, MockGenerator):
+                model_wrapper.set_mock_completions(
+                    [
+                        f"def solution(problem_input):\n    return []"
+                        for _ in range(len(conversations_batch))
+                    ]
+                )
 
             logger.info(
                 f"Generating batch of {len(conversations_batch)} completions..."

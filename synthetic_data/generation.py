@@ -50,10 +50,15 @@ def solution(problem_input):
 
 
 class MockGenerator(GenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
-        pass
+    def __init__(self, _: Dict[str, str]):
+        self.mock_completions = []
+
+    def set_mock_completions(self, completions: List[str]) -> None:
+        self.mock_completions = completions
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
+        if self.mock_completions:
+            return self.mock_completions
         return [MOCK_SNIPPET] * len(conversations)
 
 
@@ -86,8 +91,8 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
         self.oai_client = AsyncOpenAI(api_key=api_key)
-        self.model_name = "gpt-3.5-turbo"
-        self.max_concurrent = 16
+        self.model_name = "gpt-4o-mini"
+        self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
 
@@ -100,7 +105,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     model=self.model_name,
                     messages=conversation,
                     temperature=self.temperature,
-                    max_tokens=512,
+                    max_tokens=4096,
                 )
                 completion_requests.append(request)
             try:
@@ -133,21 +138,9 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.model_name = "google/gemini-flash-1.5"
+        self.model_name = "meta-llama/llama-3.1-70b-instruct:free"
         self.max_concurrent = 8
         self.temperature = 0.4
-
-
-class GroqGenerationWrapper(OpenAIGenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
-        api_key = dotenv.get("GROQ_API_KEY")
-        if api_key is None:
-            raise ValueError("GROQ_API_KEY is required for OpenRouterGenerationWrapper")
-        self.oai_client = AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://api.groq.com/openai/v1",
-        )
-        self.model_name = "mixtral-8x7b-32768"
 
 
 class AnthropicGenerationWrapper(GenerationWrapper):
@@ -223,7 +216,6 @@ class GenerationSource(str, Enum):
     OPENAI = "openai"
     VLLM = "vllm"
     OPENROUTER = "openrouter"
-    GROQ = "groq"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
     MOCK = "mock"
@@ -233,7 +225,6 @@ MODEL_WRAPPER_CLASSES = {
     GenerationSource.OPENAI: OpenAIGenerationWrapper,
     GenerationSource.VLLM: VLLMWrapper,
     GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
-    GenerationSource.GROQ: GroqGenerationWrapper,
     GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
     GenerationSource.GEMINI: GeminiWrapper,
     GenerationSource.MOCK: MockGenerator,

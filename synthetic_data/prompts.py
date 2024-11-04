@@ -385,6 +385,10 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
 def format_codecontests_generation_prompt(description: str) -> Conversation:
     conv: Conversation = [
         {
+            "role": "system",
+            "content": f"You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
+        },
+        {
             "role": "user",
             "content": f"Generate code to solve the following problem. {description} The function's signature is:\n```python\ndef solution(problem_input):\n```",
         },
