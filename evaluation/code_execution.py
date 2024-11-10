@@ -9,6 +9,7 @@ import contextlib
 import io
 import signal
 from enum import Enum
+from contextlib import redirect_stdout, redirect_stderr, contextmanager
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 
@@ -44,12 +45,14 @@ ALLOWED_FN_DICT = {fn.__name__: fn for fn in ALLOWED_FNS}
 
 # CodeContests definitions
 
+
 class Language(Enum):
     UNKNOWN = 0
     PYTHON = 1
     CPP = 2
     PYTHON3 = 3
     JAVA = 4
+
 
 class ProblemSource(Enum):
     UNKNOWN = 0
@@ -59,6 +62,7 @@ class ProblemSource(Enum):
     CODEJAM = 4
     ATCODER = 5
     AIZU = 6
+
 
 class Difficulty(Enum):
     UNKNOWN_DIFFICULTY = 0
@@ -90,6 +94,7 @@ class Difficulty(Enum):
     T = 26
     U = 27
     V = 28
+
 
 class AssertToBoolTransformer(ast.NodeTransformer):
     def __init__(self, result_list_name="results"):
@@ -193,28 +198,25 @@ class WriteOnlyStringIO(io.StringIO):
     """StringIO that throws an exception when it's read from"""
 
     def read(self, *args, **kwargs):
-        raise IOError
+        print(args, kwargs)
 
     def readline(self, *args, **kwargs):
-        raise IOError
+        print(args, kwargs)
 
     def readlines(self, *args, **kwargs):
-        raise IOError
+        print(args, kwargs)
 
     def readable(self, *args, **kwargs):
         """Returns True if the IO object can be read."""
-        print(args, kwargs)
         return False
 
 
-@contextlib.contextmanager
+@contextmanager
 def swallow_io():
-    stream = WriteOnlyStringIO()
-    with contextlib.redirect_stdout(stream):
-        with contextlib.redirect_stderr(stream):
-            with redirect_stdin(stream):
-                print(stream)
-                yield
+    output = io.StringIO()
+    with redirect_stdout(output):
+        yield output.getvalue()
+    output.close()
 
 
 class redirect_stdin(contextlib._RedirectStream):  # type: ignore
@@ -268,11 +270,14 @@ def evaluate_python_code_exec(
         full_globals = globals().copy()
         full_globals.update(exec_globals)
 
-        with swallow_io():
-            with time_limit(timeout):
-                exec(code_to_run, full_globals)
-        output = local_vars.get("result")
-        return None, output
+        out_io = io.StringIO()
+        with redirect_stdout(out_io):
+            with redirect_stderr(out_io):
+                with time_limit(timeout):
+                    exec(code_to_run, full_globals)
+        output_values = out_io.getvalue().strip().split("\n")
+        output_values = [ast.literal_eval(val) for val in output_values]
+        return None, output_values
     except TimeoutException:
         return "timed out", None
     except Exception as e:
