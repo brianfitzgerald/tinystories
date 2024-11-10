@@ -13,7 +13,6 @@ from huggingface_hub import login
 from tqdm import tqdm
 from synthetic_data.tasks import (
     CodeContests,
-    DPOTask,
     Goody2,
     PromptUpsample,
     BaseTask,

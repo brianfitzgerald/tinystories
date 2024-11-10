@@ -593,7 +593,7 @@ class CodeContests(HumanEval):
                 ):
                     expected_test_output = expected_test_output.strip().split("\n")
                     err, test_case_execution_results = evaluate_python_code_exec(
-                        completion, test_input
+                        completion, test_input, self.console
                     )
                     if err is not None:
                         logger.info(
@@ -602,6 +602,8 @@ class CodeContests(HumanEval):
                         test_results_for_completion.append(
                             [False] * len(expected_test_output)
                         )
+                        continue
+
                     if len(expected_test_output) == 1 and isinstance(
                         test_case_execution_results, str
                     ):
@@ -612,15 +614,23 @@ class CodeContests(HumanEval):
                         test_case_execution_results = (
                             test_case_execution_results.strip().split("\n")
                         )
-                    if not isinstance(test_case_execution_results, list) or len(
-                        test_case_execution_results
-                    ) != len(expected_test_output):
+
+                    if not isinstance(test_case_execution_results, list):
                         logger.info(
-                            f"Outputs from test case execution do not match expected outputs - expected: {expected_test_output}, actual: {test_case_execution_results}"
+                            f"Expected list of outputs, got: {test_case_execution_results}"
                         )
                         test_results_for_completion.append(
                             [False] * len(expected_test_output)
                         )
+                        continue
+                    elif len(test_case_execution_results) != len(expected_test_output):
+                        logger.info(
+                            f"Length of execution outputs does not match no. of test cases: expected {len(expected_test_output)}, actual: {len(test_case_execution_results)}"
+                        )
+                        test_results_for_completion.append(
+                            [False] * len(expected_test_output)
+                        )
+                        continue
                     else:
                         test_case_results = []
                         for expected, actual in zip(
@@ -628,9 +638,11 @@ class CodeContests(HumanEval):
                         ):
                             test_case_results.append(str(expected) == str(actual))
                         test_results_for_completion.append(test_case_results)
-                n_tests_passed = sum(flatten_list(test_results_for_completion))
+
+                flattened_tests = flatten_list(test_results_for_completion)
+                n_tests_passed = sum(flattened_tests)
                 logger.info(
-                    f"Tests passed for completion {i}: {n_tests_passed} / {len(test_results_for_completion)}"
+                    f"Tests passed for completion {i}: {n_tests_passed} / {len(flattened_tests)}"
                 )
                 if n_tests_passed > best_score:
                     best_score = n_tests_passed

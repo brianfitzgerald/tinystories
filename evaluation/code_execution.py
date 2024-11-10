@@ -189,7 +189,7 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, timeout: float = 1000
+    code_to_run: str, test_inputs: str, console: Console, timeout: float = 1000
 ) -> Tuple[Optional[str], Any]:
 
     result = []
