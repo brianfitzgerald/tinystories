@@ -241,10 +241,9 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, timeout: float = 1000
+    code_to_run: str, test_inputs: str, timeout: float = 10
 ) -> Tuple[Optional[str], Any]:
 
-    result = []
     inputs_idx = 0
     input_values = []
 
@@ -276,7 +275,10 @@ def evaluate_python_code_exec(
                 with time_limit(timeout):
                     exec(code_to_run, full_globals)
         output_values = out_io.getvalue().strip().split("\n")
-        output_values = [ast.literal_eval(val) for val in output_values]
+        try:
+            output_values = [ast.literal_eval(val) for val in output_values]
+        except Exception:
+            pass
         return None, output_values
     except TimeoutException:
         return "timed out", None

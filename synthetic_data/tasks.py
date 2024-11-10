@@ -600,7 +600,7 @@ class CodeContests(HumanEval):
                     problem.public_tests["input"], problem.public_tests["output"]
                 ):
                     expected_test_output: List[str] = expected_test_output.strip().split("\n")  # type: ignore
-                    logger.info(f"Running test for completion {i}, with input: {test_input}")
+                    logger.info(f"Running test for completion {i}...")
                     err, execution_output = evaluate_python_code_exec(
                         completion, test_input, 250
                     )
