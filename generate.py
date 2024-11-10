@@ -54,7 +54,7 @@ def main(
     batch_size: int = 2,
     restart: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.OPENAI,
+    generation_source: GenerationSource = GenerationSource.GEMINI,
     task_name: str = "codecontests",
     n_epochs: int = 1,
     **kwargs,

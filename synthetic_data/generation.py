@@ -102,7 +102,6 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     model=self.model_name,
                     messages=conversation,
                     temperature=self.temperature,
-                    max_tokens=4096,
                 )
                 completion_requests.append(request)
             try:
@@ -179,10 +178,13 @@ class AnthropicGenerationWrapper(GenerationWrapper):
 
 class GeminiWrapper(OpenAIGenerationWrapper):
     def __init__(self, dotenv) -> None:
-        api_key = dotenv.get("GEMII_API_KEY")
+        api_key = dotenv.get("GOOGLE_API_KEY")
         if api_key is None:
-            raise ValueError("GEMII_API_KEY is required for GeminiWrapper")
-        self.oai_client = AsyncOpenAI(api_key=api_key)
+            raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
+        self.oai_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/",
+        )
         self.model_name = "gemini-1.5-flash-8b"
         self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
