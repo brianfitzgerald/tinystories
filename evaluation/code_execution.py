@@ -223,6 +223,7 @@ def evaluate_python_code_exec(
     except TimeoutException:
         return "timed out", None
     except Exception as e:
+        traceback.print_exc()
         return str(e), None
 
 

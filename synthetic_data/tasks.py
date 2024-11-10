@@ -595,6 +595,13 @@ class CodeContests(HumanEval):
                     err, test_case_execution_results = evaluate_python_code_exec(
                         completion, test_input
                     )
+                    if err is not None:
+                        logger.info(
+                            f"Error in test case execution - error: {err}, results: {test_case_execution_results}"
+                        )
+                        test_results_for_completion.append(
+                            [False] * len(expected_test_output)
+                        )
                     if len(expected_test_output) == 1 and isinstance(
                         test_case_execution_results, str
                     ):
@@ -609,7 +616,7 @@ class CodeContests(HumanEval):
                         test_case_execution_results
                     ) != len(expected_test_output):
                         logger.info(
-                            f"Error in test case execution - error: {err}, results: {test_case_execution_results}"
+                            f"Outputs from test case execution do not match expected outputs - expected: {expected_test_output}, actual: {test_case_execution_results}"
                         )
                         test_results_for_completion.append(
                             [False] * len(expected_test_output)

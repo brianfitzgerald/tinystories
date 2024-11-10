@@ -28,7 +28,6 @@ dependencies = [
     "pytest",
     "kaggle",
     "datacommons",
-    "google-generativeai",
     "datacommons-pandas>=0.0.3",
     "ipykernel>=6.29.5",
     "transformers==4.45.2",

@@ -7,9 +7,6 @@ from anthropic.types.message_param import MessageParam
 from anthropic.types.message import Message
 from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
-import google.generativeai as genai
-from google.generativeai.types import ContentDict
-from google.generativeai.types.content_types import ContentsType
 from enum import Enum
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
 
@@ -180,36 +177,16 @@ class AnthropicGenerationWrapper(GenerationWrapper):
             return []
 
 
-def _chatgpt_to_gemini(conversation: Conversation) -> ContentsType:
-
-    out: List[ContentDict] = []
-    for message in conversation:
-        assert "content" in message, f"Message {message} does not have 'content' key"
-        assert isinstance(
-            message["content"], str
-        ), f"Message {message} content is not a string"
-        out.append(
-            {
-                "role": message["role"],
-                "parts": [message["content"]],
-            }
-        )
-
-    return out
-
-
-class GeminiWrapper(GenerationWrapper):
+class GeminiWrapper(OpenAIGenerationWrapper):
     def __init__(self, dotenv) -> None:
-        self.model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
-
-    async def generate(self, conversations: List[Conversation]) -> List[str]:
-        completions = []
-        for conversation in conversations:
-            gemini_conv = _chatgpt_to_gemini(conversation)
-            completion = await self.model.generate_content_async(gemini_conv)
-            completions.append(completion.parts[0].text)
-
-        return completions
+        api_key = dotenv.get("GEMII_API_KEY")
+        if api_key is None:
+            raise ValueError("GEMII_API_KEY is required for GeminiWrapper")
+        self.oai_client = AsyncOpenAI(api_key=api_key)
+        self.model_name = "gemini-1.5-flash-8b"
+        self.max_concurrent = 8
+        self.n_retries = MAX_RETRIES
+        self.temperature = 0.2
 
 
 class GenerationSource(str, Enum):
