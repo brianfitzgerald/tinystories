@@ -31,6 +31,7 @@ from pydantic import ValidationError
 from datasets import Dataset
 from loguru import logger
 from rich.console import Console
+from rich.markdown import Markdown
 from dataclasses import dataclass
 
 from synthetic_data.utils import (
@@ -558,12 +559,15 @@ class CodeContests(HumanEval):
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         input_batch = dictl(batch)
-        self.samples = [CodeforcesProblem(**row) for row in input_batch]
+        self.problems = [CodeforcesProblem(**row) for row in input_batch]
         self.input_conversations = []
 
-        for i, sample in enumerate(self.samples):
+        for i, problem in enumerate(self.problems):
+            self.console.print(
+                Markdown(f"\n**Problem {i}, {problem.name}**\n({problem.description}")
+            )
             self.input_conversations.extend(
-                [format_codecontests_generation_prompt(sample.description)]
+                [format_codecontests_generation_prompt(problem.description)]
                 * self.n_completions_per_sample
             )
         return self.input_conversations
@@ -573,12 +577,11 @@ class CodeContests(HumanEval):
         for i, completions_for_sample in enumerate(
             chunk_list(completions, self.n_completions_per_sample)
         ):
-            sample = self.samples[i]
+            problem = self.problems[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
                 code_snippets = extract_code_block(completion, "python")
-                completion = code_snippets[0]
                 if len(code_snippets) == 0:
                     logger.error(f"No code snippet found for completion {i}")
                     continue
@@ -586,10 +589,11 @@ class CodeContests(HumanEval):
                     logger.warning(
                         f"Has more than one code snippet: {code_snippets} for completion {i}"
                     )
+                completion = code_snippets[0]
                 print_code_snippet(completion, self.console)
                 test_results_for_completion = []
                 for test_input, expected_test_output in zip(
-                    sample.public_tests["input"], sample.public_tests["output"]
+                    problem.public_tests["input"], problem.public_tests["output"]
                 ):
                     expected_test_output = expected_test_output.strip().split("\n")
                     err, test_case_execution_results = evaluate_python_code_exec(
@@ -662,9 +666,9 @@ class CodeContests(HumanEval):
                     "chosen_score": best_score,
                     "rejected": worst_completion,
                     "rejected_score": worst_score,
-                    "name": sample.name,
+                    "name": problem.name,
                     "error": err,
-                    "description": sample.description,
+                    "description": problem.description,
                 }
             )
         return res
