@@ -203,6 +203,7 @@ class WriteOnlyStringIO(io.StringIO):
 
     def readable(self, *args, **kwargs):
         """Returns True if the IO object can be read."""
+        print(args, kwargs)
         return False
 
 
@@ -212,6 +213,7 @@ def swallow_io():
     with contextlib.redirect_stdout(stream):
         with contextlib.redirect_stderr(stream):
             with redirect_stdin(stream):
+                print(stream)
                 yield
 
 
@@ -263,9 +265,12 @@ def evaluate_python_code_exec(
             "input": _retrieve_input,
             "exit": _exit,
         }
+        full_globals = globals().copy()
+        full_globals.update(exec_globals)
+
         with swallow_io():
             with time_limit(timeout):
-                exec(code_to_run, exec_globals, local_vars)
+                exec(code_to_run, full_globals)
         output = local_vars.get("result")
         return None, output
     except TimeoutException:
