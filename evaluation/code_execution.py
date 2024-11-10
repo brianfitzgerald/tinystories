@@ -8,7 +8,7 @@ import ast
 import contextlib
 import io
 import signal
-
+from enum import Enum
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 
@@ -42,6 +42,54 @@ ALLOWED_FNS = {
 }
 ALLOWED_FN_DICT = {fn.__name__: fn for fn in ALLOWED_FNS}
 
+# CodeContests definitions
+
+class Language(Enum):
+    UNKNOWN = 0
+    PYTHON = 1
+    CPP = 2
+    PYTHON3 = 3
+    JAVA = 4
+
+class ProblemSource(Enum):
+    UNKNOWN = 0
+    CODECHEF = 1
+    CODEFORCES = 2
+    HACKEREARTH = 3
+    CODEJAM = 4
+    ATCODER = 5
+    AIZU = 6
+
+class Difficulty(Enum):
+    UNKNOWN_DIFFICULTY = 0
+    EASY = 1
+    MEDIUM = 2
+    HARD = 3
+    HARDER = 4
+    HARDEST = 5
+    EXTERNAL = 6
+    A = 7
+    B = 8
+    C = 9
+    D = 10
+    E = 11
+    F = 12
+    G = 13
+    H = 14
+    I = 15
+    J = 16
+    K = 17
+    L = 18
+    M = 19
+    N = 20
+    O = 21
+    P = 22
+    Q = 23
+    R = 24
+    S = 25
+    T = 26
+    U = 27
+    V = 28
 
 class AssertToBoolTransformer(ast.NodeTransformer):
     def __init__(self, result_list_name="results"):
@@ -189,7 +237,7 @@ def time_limit(seconds: float):
 
 
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, console: Console, timeout: float = 1000
+    code_to_run: str, test_inputs: str, timeout: float = 1000
 ) -> Tuple[Optional[str], Any]:
 
     result = []
@@ -197,7 +245,7 @@ def evaluate_python_code_exec(
     input_values = []
 
     test_inputs_list = test_inputs.strip().split("\n")
-    code_to_run = code_to_run + f"\nresult = solution({test_inputs_list})"
+    input_values = test_inputs_list
 
     def _retrieve_input(value=None):
         nonlocal inputs_idx

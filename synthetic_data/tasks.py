@@ -550,6 +550,7 @@ class CodeContests(HumanEval):
     def __init__(self, console) -> None:
         super().__init__(console)
         self.n_completions_per_sample = 2
+        self.print_definitions = False
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:
         sample_dc = CodeforcesProblem(**sample)
@@ -563,9 +564,10 @@ class CodeContests(HumanEval):
         self.input_conversations = []
 
         for i, problem in enumerate(self.problems):
-            self.console.print(
-                Markdown(f"\n**Problem {i}, {problem.name}**\n({problem.description}")
-            )
+            if self.print_definitions:
+                self.console.print(
+                    Markdown(f"\n\n# Problem {i}, {problem.name}\n\n{problem.description}")
+                )
             self.input_conversations.extend(
                 [format_codecontests_generation_prompt(problem.description)]
                 * self.n_completions_per_sample
