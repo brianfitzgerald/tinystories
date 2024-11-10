@@ -92,6 +92,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
+        self.max_tokens = 4096
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         self.n_retries = MAX_RETRIES
@@ -102,12 +103,19 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     model=self.model_name,
                     messages=conversation,
                     temperature=self.temperature,
+                    max_completion_tokens=self.max_tokens,
                 )
                 completion_requests.append(request)
             try:
                 results: List[ChatCompletion] = await gather_with_concurrency_limit(
                     self.max_concurrent, *completion_requests
                 )
+                if not results:
+                    logger.error(results)
+                    raise ValueError("No completions returned")
+                assert all(
+                    len(result.choices) > 0 for result in results
+                ), "No completions returned"
                 completions = [
                     result.choices[0].message.content
                     for result in results
@@ -189,6 +197,7 @@ class GeminiWrapper(OpenAIGenerationWrapper):
         self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
+        self.max_tokens = 8192
 
 
 class GenerationSource(str, Enum):

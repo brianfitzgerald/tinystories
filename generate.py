@@ -48,12 +48,11 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
 
 
 def main(
-    # n batches
-    upload_every: int = 10,
+    upload_every_n_batches: int = 10,
     batch_size: int = 2,
     restart: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.GEMINI,
+    generation_source: GenerationSource = GenerationSource.OPENAI,
     task_name: str = "codecontests",
     n_epochs: int = 1,
     **kwargs,
@@ -136,7 +135,9 @@ def main(
             batch = cast(Dict, batch)
             conversations_batch = task.format_input_conversation(batch)
 
-            if isinstance(task, CodeContests) and isinstance(model_wrapper, MockGenerator):
+            if isinstance(task, CodeContests) and isinstance(
+                model_wrapper, MockGenerator
+            ):
                 model_wrapper.set_mock_completions(
                     [
                         f"def solution(problem_input):\n    return []"
@@ -152,7 +153,7 @@ def main(
             output_rows_batch = task.format_output_rows(completions)
             print_result_dicts(output_rows_batch)
             new_dataset_rows.extend(output_rows_batch)
-            if batch_idx % upload_every == 0 and batch_idx > 0:
+            if batch_idx % upload_every_n_batches == 0 and batch_idx > 0:
                 upload_dataset(
                     output_dataset, task.output_dataset_name, new_dataset_rows
                 )
