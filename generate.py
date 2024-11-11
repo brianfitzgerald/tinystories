@@ -54,7 +54,7 @@ def main(
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENAI,
     task_name: str = "codecontests",
-    n_epochs: int = 1,
+    n_epochs: int = 5,
     **kwargs,
 ):
     """
