@@ -549,7 +549,7 @@ class CodeContests(HumanEval):
 
     def __init__(self, console) -> None:
         super().__init__(console)
-        self.n_completions_per_sample = 2
+        self.n_completions_per_sample = 3
         self.print_definitions = False
 
     def format_inference_conversation(self, sample: Dict) -> Conversation:

@@ -49,7 +49,7 @@ DATA_TASKS: Dict[str, type[BaseTask]] = {
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 2,
+    batch_size: int = 4,
     restart: bool = False,
     resume_input_position: bool = True,
     generation_source: GenerationSource = GenerationSource.OPENAI,
