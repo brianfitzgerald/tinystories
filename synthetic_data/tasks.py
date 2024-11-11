@@ -600,12 +600,12 @@ class CodeContests(HumanEval):
                     problem.public_tests["input"], problem.public_tests["output"]
                 ):
                     expected_test_output: List[str] = expected_test_output.strip().split("\n")  # type: ignore
-                    logger.info(f"Running test for completion {i}...")
+                    logger.info(f"Running test for completion {j}...")
                     err, execution_output = evaluate_python_code_exec(
-                        completion, test_input, 250
+                        completion, test_input, 2
                     )
                     logger.info(
-                        f"Test output for completion {i}: {execution_output}, expected: {expected_test_output}"
+                        f"Test output for completion {j}: {execution_output}, expected: {expected_test_output}"
                     )
                     if err is not None:
                         logger.info(
@@ -661,7 +661,7 @@ class CodeContests(HumanEval):
                     f"Best and worst completions have the same score for problem {i}: {best_score}"
                 )
                 continue
-            logger.info(f"Adding completion, best: {best_score}, worst: {worst_score}")
+            logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
             res.append(
                 {
                     "chosen": best_completion,

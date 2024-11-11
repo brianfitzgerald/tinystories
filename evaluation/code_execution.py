@@ -10,6 +10,7 @@ import io
 import signal
 from enum import Enum
 from contextlib import redirect_stdout, redirect_stderr, contextmanager
+from wrapt_timeout_decorator import timeout
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 
@@ -223,25 +224,10 @@ class redirect_stdin(contextlib._RedirectStream):  # type: ignore
     _stream = "stdin"
 
 
-class TimeoutException(Exception):
-    pass
 
-
-@contextlib.contextmanager
-def time_limit(seconds: float):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-
-
+@timeout(2)
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, timeout: float = 10
+    code_to_run: str, test_inputs: str, timeout_sec: float = 10
 ) -> Tuple[Optional[str], Any]:
 
     inputs_idx = 0
@@ -259,8 +245,6 @@ def evaluate_python_code_exec(
     def _exit(value=None):
         return
 
-    local_vars = {}
-
     try:
         exec_globals = {
             "input": _retrieve_input,
@@ -272,15 +256,14 @@ def evaluate_python_code_exec(
         out_io = io.StringIO()
         with redirect_stdout(out_io):
             with redirect_stderr(out_io):
-                with time_limit(timeout):
-                    exec(code_to_run, full_globals)
+                exec(code_to_run, full_globals)
         output_values = out_io.getvalue().strip().split("\n")
         try:
             output_values = [ast.literal_eval(val) for val in output_values]
         except Exception:
             pass
         return None, output_values
-    except TimeoutException:
+    except TimeoutError:
         return "timed out", None
     except Exception as e:
         traceback.print_exc()

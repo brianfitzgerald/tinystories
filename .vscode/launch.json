@@ -20,7 +20,7 @@
             "request": "launch",
             "program": "generate.py",
             "console": "integratedTerminal",
-            "args": ["--restart"],
+            // "args": ["--restart"],
             "env": {
                 "PYDEVD_DISABLE_FILE_VALIDATION": "1"
             }

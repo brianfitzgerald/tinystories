@@ -138,6 +138,7 @@ def main(
             if isinstance(task, CodeContests) and isinstance(
                 model_wrapper, MockGenerator
             ):
+                # TODO add these when we have sample completions again
                 model_wrapper.set_mock_completions(
                     [
                         f"def solution(problem_input):\n    return []"
@@ -151,7 +152,6 @@ def main(
             completions = asyncio.run(model_wrapper.generate(conversations_batch))
 
             output_rows_batch = task.format_output_rows(completions)
-            print_result_dicts(output_rows_batch)
             new_dataset_rows.extend(output_rows_batch)
             if batch_idx % upload_every_n_batches == 0 and batch_idx > 0:
                 upload_dataset(

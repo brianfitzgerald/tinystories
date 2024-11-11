@@ -34,4 +34,5 @@ dependencies = [
     "torch>=2.4.1",
     "rich>=13.9.2",
     "polars>=1.12.0",
+    "wrapt-timeout-decorator>=1.5.1",
 ]
