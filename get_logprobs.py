@@ -5,45 +5,44 @@ from datasets import load_dataset
 from safetensors.torch import save_file
 from tqdm import tqdm
 
-
-def compute_logprobs(model, tokenizer, inputs):
-    """
-    Compute log probabilities of the completions.
-    """
-    with torch.no_grad():
-        inputs = tokenizer(inputs, return_tensors="pt", padding=True, truncation=True)
-        outputs = model(**inputs, labels=inputs["input_ids"])
-        log_probs = -torch.nn.functional.cross_entropy(
-            outputs.logits.view(-1, outputs.logits.size(-1)),
-            inputs["input_ids"].view(-1),
-            reduction="none",
-        )
-        log_probs = log_probs.view(
-            inputs["input_ids"].size()
-        )  # Reshape to match inputs
-        return log_probs
-
+def _get_logprobs(model, tokenizer, batch):
+    tokenized = tokenizer(
+        batch, return_tensors="pt", padding=True, truncation=True
+    ).to("cuda")
+    outputs = model(**tokenized, labels=tokenized["input_ids"])
+    return outputs.logits.cpu()
 
 def main(
     model_name="Qwen/Qwen2.5-0.5B",
     dataset_name="roborovski/codecontests-dpo",
-    dataset_split="train",
     output_file="logprobs.safetensors",
+    batch_size=2,
+    max_samples=100
 ):
 
     print("Loading model and tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name).to("cuda")
     model.eval()
-    dataset = load_dataset(dataset_name, dataset_split)
+    print("Loading dataset...")
+    dataset = load_dataset(dataset_name, split="train")
     all_logprobs = {}
-    for i, example in enumerate(tqdm(dataset)):
-        print(f"Processing example {i+1}/{len(dataset)}...")  # type: ignore
-        logprobs = compute_logprobs(model, tokenizer, example["text"])
-        all_logprobs[f"example_{i}"] = logprobs.cpu()
+    with torch.no_grad():
+        batch = []
+        for i, example in enumerate(tqdm(dataset)):
+            batch.append((example["chosen"], example["rejected"]))
+            if len(batch) == batch_size:
+                chosen_logprobs = [_get_logprobs(model, tokenizer, x[0]) for x in batch]
+                rejected_logprobs = [_get_logprobs(model, tokenizer, x[1]) for x in batch]
+                for i in range(len(batch)):
+                    all_logprobs[f"{i}_chosen"] = chosen_logprobs[i].cpu()
+                    all_logprobs[f"{i}_rejected"] = rejected_logprobs[i].cpu()
+                batch = []
+            if i == max_samples:
+                break
 
     # Save logprobs
-    print("Saving logprobs...")
+    print("Saving file...")
     save_file(all_logprobs, output_file)
 
 
