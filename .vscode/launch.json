@@ -1,7 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
@@ -21,6 +18,16 @@
             "program": "generate.py",
             "console": "integratedTerminal",
             // "args": ["--restart"],
+            "env": {
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1"
+            }
+        },
+        {
+            "name": "Get Logprobs",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "get_logprobs.py",
+            "console": "integratedTerminal",
             "env": {
                 "PYDEVD_DISABLE_FILE_VALIDATION": "1"
             }
