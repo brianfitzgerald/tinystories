@@ -206,3 +206,18 @@ class UltraFeedbackDataModule(SmDataset):
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
         self.cpu_count = 1
         self.max_token_length = max_token_length
+
+    def process_samples_batch(self, examples: dict):
+        inputs, labels = {"rejected": [], "chosen": []}, {"rejected": [], "chosen": []}
+        for i in range(len(examples["source"])):
+            example = {k: v[i] for k, v in examples.items()}
+            triplets = create_triplets(example, self.tokenizer)
+            for response_role in ["chosen", "rejected"]:
+                inputs[response_role].append(triplets["prompt"])
+                labels[response_role].append(triplets[response_role])
+        out_dict = {}
+        for response_role in ["chosen", "rejected"]:
+            tokenized = self._tokenize(inputs[response_role], labels[response_role])
+            for key, value in tokenized.items():
+                out_dict[f"{response_role}_{key}"] = value
+        return out_dict

@@ -1,20 +1,23 @@
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers.tokenization_utils import PreTrainedTokenizer
-from model.utils import LMHyperParams, SmModel, ModelChoice
+from model.utils import LMHyperParams, SmModel, ModelChoice, TuningType
 from torch.optim import AdamW
 import torch
+from loguru import logger
 
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.modeling_utils import PreTrainedModel
 from transformers import BitsAndBytesConfig
 from peft.tuners.lora import LoraConfig
+from peft.mapping import get_peft_model
+from peft.peft_model import PeftModel
 
 
 class AutoLMFineTuner(SmModel):
     def __init__(self, params: LMHyperParams) -> None:
         super().__init__(params)
-        self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
+        self.model: PreTrainedModel | PeftModel = AutoModelForCausalLM.from_pretrained(
             params.base_model_checkpoint, trust_remote_code=True
         )  # type: ignore
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)  # type: ignore
@@ -24,6 +27,7 @@ class AutoLMFineTuner(SmModel):
         self.params = params
         self.hparams.update(vars(params))
         self.model_choice = ModelChoice.CAUSAL_LM
+        self.tuning_type: TuningType = params.tuning_type
         if params.tuning_type == "dpo":
             self.peft_config = LoraConfig(
                 lora_alpha=128,
@@ -33,6 +37,8 @@ class AutoLMFineTuner(SmModel):
                 target_modules="all-linear",
                 task_type="CAUSAL_LM",
             )
+            logger.info(f"Using DPO with LoraConfig: {self.peft_config}")
+            self.model = get_peft_model(self.model, self.peft_config) # type: ignore
 
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
@@ -59,13 +65,25 @@ class AutoLMFineTuner(SmModel):
         return out
 
     def _step(self, batch: dict):
-        outputs = self(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"],
-            labels=batch["labels"],
-        )
-
-        return outputs.loss
+        if self.tuning_type == "sft":
+            outputs = self(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                labels=batch["labels"],
+            )
+            return outputs.loss
+        elif self.tuning_type == "dpo":
+            model_out_chosen = self.model(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                labels=batch["labels"],
+            )
+            model_out_chosen = self.model(
+                input_ids=batch["input_ids"],
+                attention_mask=batch["attention_mask"],
+                labels=batch["labels"],
+            )
+            return outputs.loss
 
     def training_step(self, batch, batch_idx):
         loss = self._step(batch)
