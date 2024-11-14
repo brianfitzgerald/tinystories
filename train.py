@@ -172,30 +172,54 @@ def main(
     assert not kwargs, f"Unknown arguments: {kwargs}"
 
     load_dotenv(".env")
-
-    loggers = []
-
     model_config = CONFIGS[config]
     hparams = model_config.hyperparams
+
     tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(  # type: ignore
         hparams.tokenizer_checkpoint_value
     )
     data_module = model_config.data_module(
         hparams.train_batch_size, tokenizer, hparams.max_seq_length
     )
-    model = model_config.model(hparams, tokenizer)
-
-    wandb_logger = None
+    model = model_config.model(hparams)
+    precision = "32" if model_config.model == T5FineTuner else "16-mixed"
     suffix = "".join(random.choices(string.ascii_letters + string.digits, k=4))
     if run_name:
         run_name = f"{config}-{run_name}-{suffix}"
     else:
         run_name = f"{config}-{suffix}"
 
+    start_training(
+        precision,
+        run_name,
+        model,
+        tokenizer,
+        data_module,
+        hparams,
+        wandb,
+        model_config.wandb_project_name,
+    )
+
+
+def start_training(
+    precision: str,
+    run_name: str,
+    model: pl.LightningModule,
+    tokenizer: PreTrainedTokenizer,
+    data_module: pl.LightningDataModule,
+    hparams: LMHyperParams,
+    wandb: bool = False,
+    project_name: Optional[str] = None,
+):
+    """
+    Main fit function, split out to allow invoking from a notebook
+    """
+    loggers = []
+
+    wandb_logger = None
+
     if wandb:
-        wandb_logger = WandbLogger(
-            name=run_name, project=model_config.wandb_project_name
-        )
+        wandb_logger = WandbLogger(name=run_name, project=project_name)
         loggers.append(wandb_logger)
         wandb_logger.watch(model)
     else:
@@ -237,7 +261,6 @@ def main(
         )
 
     progress_bar_callback = TQDMProgressBar(refresh_rate=1)
-    precision = "32" if model_config.model == T5FineTuner else "16-mixed"
 
     effective_batch_size = (
         hparams.train_batch_size * hparams.gradient_accumulation_steps
@@ -249,7 +272,7 @@ def main(
     trainer = pl.Trainer(
         accumulate_grad_batches=hparams.gradient_accumulation_steps,
         max_epochs=hparams.num_train_epochs,
-        precision=precision,
+        precision=precision,  # type: ignore
         gradient_clip_val=hparams.max_grad_norm,
         val_check_interval=0.1,
         callbacks=[

@@ -19,7 +19,7 @@ def format_squad_extractive(sample: dict) -> Tuple[str, str]:
 
     schema: dict = json.loads(sample['json_schema'])
     json_schema = {key: type(value).__name__ for key, value in schema.items()}
-    input_out = f"Extract the following information using the provided schema: \t{json.dumps(json_schema)}\tand the following context: \t{sample["context"]}\n"
+    input_out = f"Extract the following information using the provided schema: \t{json.dumps(json_schema)}\tand the following context: \t{sample['context']}\n"
     labels_out = json.dumps(schema)
 
     return input_out, labels_out

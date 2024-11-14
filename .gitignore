@@ -190,3 +190,4 @@ baseline_eval
 synthetic_image_data/*
 
 *.csv
+notebooks/logs/*

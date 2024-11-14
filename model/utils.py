@@ -21,6 +21,7 @@ IGNORE_TOKEN_INDEX = -100
 PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
+TuningType = Literal["sft", "dpo"]
 
 
 class ModelChoice(Enum):
@@ -48,6 +49,7 @@ class LMHyperParams:
     seed: int = 42
     weight_decay: float = 0.0
     optimizer: OptimizerChoice = "AdamW8bit"
+    tuning_type: TuningType = "sft"
 
     def warmup_steps(self, train_steps: Union[int, float]) -> int:
         if self.warmup_ratio:

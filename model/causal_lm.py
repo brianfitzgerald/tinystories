@@ -8,6 +8,7 @@ from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.modeling_utils import PreTrainedModel
 from transformers import BitsAndBytesConfig
+from peft.tuners.lora import LoraConfig
 
 
 class AutoLMFineTuner(SmModel):
@@ -16,14 +17,22 @@ class AutoLMFineTuner(SmModel):
         self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
             params.base_model_checkpoint, trust_remote_code=True
         )  # type: ignore
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint) # type: ignore
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)  # type: ignore
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
         self.params = params
         self.hparams.update(vars(params))
         self.model_choice = ModelChoice.CAUSAL_LM
-
+        if params.tuning_type == "dpo":
+            self.peft_config = LoraConfig(
+                lora_alpha=128,
+                lora_dropout=0.05,
+                r=256,
+                bias="none",
+                target_modules="all-linear",
+                task_type="CAUSAL_LM",
+            )
 
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
