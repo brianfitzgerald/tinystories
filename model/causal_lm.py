@@ -112,13 +112,13 @@ class AutoLMFineTuner(SmModel):
                         labels=batch[f"{label}_labels"],
                     )
             # TODO log rewards
-            loss, chosen_rewards, rejected_rewards = dpo_loss(
+            losses, chosen_rewards, rejected_rewards = dpo_loss(
                 model_out_dict["policy_chosen"].logits,
                 model_out_dict["policy_rejected"].logits,
                 model_out_dict["reference_chosen"].logits,
                 model_out_dict["reference_rejected"].logits,
             )
-            return loss
+            return losses.mean()
         else:
             raise ValueError(f"Invalid tuning type: {self.tuning_type}")
 

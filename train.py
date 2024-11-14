@@ -276,7 +276,7 @@ def start_training(
         gradient_clip_val=hparams.max_grad_norm,
         val_check_interval=0.1,
         callbacks=[
-            sample_callback,
+            # sample_callback,
             checkpoint_callback,
             progress_bar_callback,
             learning_rate_callback,

@@ -226,12 +226,16 @@ class UltraFeedbackDataModule(SmDataset):
         self.train_dataset = self.train_dataset.map(
             self.process_samples_batch,
             batched=True,
+            load_from_cache_file=True,
+            cache_file_name=f"{self.cache_dir}/training.parquet",
             num_proc=self.cpu_count,
         )
 
         self.val_dataset = self.val_dataset.map(
             self.process_samples_batch,
             batched=True,
+            load_from_cache_file=True,
+            cache_file_name=f"{self.cache_dir}/validation.parquet",
             num_proc=self.cpu_count,
         )
         # TODO offline generate reference logps
