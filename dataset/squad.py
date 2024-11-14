@@ -5,12 +5,15 @@ from unidecode import unidecode
 import torch
 from torch import Tensor
 import torch.nn.functional as F
+from typing import Optional
+from loguru import logger
+from datasets import load_dataset
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 from synthetic_data.utils import ExtractiveQARow, ShareGPTConversation
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
 
-from model.utils import SmDataset, IGNORE_TOKEN_INDEX
+from model.utils import SmDataset, IGNORE_TOKEN_INDEX, ensure_directory
 
 
 def format_squad_extractive(sample: dict) -> Tuple[str, str]:
@@ -206,6 +209,45 @@ class UltraFeedbackDataModule(SmDataset):
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
         self.cpu_count = 1
         self.max_token_length = max_token_length
+
+    def setup(self, stage: Optional[str] = None):
+        logger.info(f"Loading dataset for stage {stage}")
+
+        # Load dataset and split
+        dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
+        self.train_dataset = dataset["train"]
+        self.val_dataset = dataset["test"]
+
+        ensure_directory(self.cache_dir, clear=False)
+        logger.info(
+            f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}"
+        )
+
+        self.train_dataset = self.train_dataset.map(
+            self.process_samples_batch,
+            batched=True,
+            num_proc=self.cpu_count,
+        )
+
+        self.val_dataset = self.val_dataset.map(
+            self.process_samples_batch,
+            batched=True,
+            num_proc=self.cpu_count,
+        )
+        # TODO offline generate reference logps
+
+        columns = [
+            "chosen_input_ids",
+            "chosen_attention_mask",
+            "chosen_labels",
+            "rejected_input_ids",
+            "rejected_attention_mask",
+            "rejected_labels",
+        ]
+
+        # Set format for PyTorch
+        self.train_dataset.set_format(type="torch", columns=columns)
+        self.val_dataset.set_format(type="torch", columns=columns)
 
     def process_samples_batch(self, examples: dict):
         inputs, labels = {"rejected": [], "chosen": []}, {"rejected": [], "chosen": []}

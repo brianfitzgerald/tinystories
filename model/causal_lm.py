@@ -2,7 +2,10 @@ from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers.tokenization_utils import PreTrainedTokenizer
 from model.utils import LMHyperParams, SmModel, ModelChoice, TuningType
 from torch.optim import AdamW
+import torch.nn.functional as F
 import torch
+from torch import Tensor as T
+from trl.models.modeling_base import create_reference_model
 from loguru import logger
 
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
@@ -12,6 +15,32 @@ from transformers import BitsAndBytesConfig
 from peft.tuners.lora import LoraConfig
 from peft.mapping import get_peft_model
 from peft.peft_model import PeftModel
+from typing import Tuple
+
+
+def dpo_loss(
+    policy_chosen_logps: T,
+    policy_rejected_logps: T,
+    reference_chosen_logps: T,
+    reference_rejected_logps: T,
+    beta: float = 1,
+) -> Tuple[T, T, T]:
+
+    chosen_ratio = policy_chosen_logps - reference_chosen_logps
+    rejected_ratio = policy_rejected_logps - reference_rejected_logps
+
+    chosen_ratio_scaled = beta * chosen_ratio
+    rejected_ratio_scaled = beta * rejected_ratio
+
+    losses = F.logsigmoid(chosen_ratio_scaled) - F.logsigmoid(rejected_ratio_scaled)
+
+    chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
+    rejected_rewards = (
+        beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    )
+
+    return losses, chosen_rewards, rejected_rewards
+
 
 
 class AutoLMFineTuner(SmModel):
@@ -38,7 +67,8 @@ class AutoLMFineTuner(SmModel):
                 task_type="CAUSAL_LM",
             )
             logger.info(f"Using DPO with LoraConfig: {self.peft_config}")
-            self.model = get_peft_model(self.model, self.peft_config) # type: ignore
+            self.reference_model = create_reference_model(self.model) # type: ignore
+            self.model = get_peft_model(self.model, self.peft_config)  # type: ignore
 
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
@@ -64,7 +94,7 @@ class AutoLMFineTuner(SmModel):
         )
         return out
 
-    def _step(self, batch: dict):
+    def _step(self, batch: dict) -> T:
         if self.tuning_type == "sft":
             outputs = self(
                 input_ids=batch["input_ids"],
@@ -73,17 +103,24 @@ class AutoLMFineTuner(SmModel):
             )
             return outputs.loss
         elif self.tuning_type == "dpo":
-            model_out_chosen = self.model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                labels=batch["labels"],
+            model_out_dict = {}
+            for label in ["chosen", "rejected"]:
+                for model_name, model in [("reference", self.reference_model), ("policy", self.model)]:
+                    model_out_dict[f"{model_name}_{label}"] = model(
+                        input_ids=batch[f"{label}_input_ids"],
+                        attention_mask=batch[f"{label}_attention_mask"],
+                        labels=batch[f"{label}_labels"],
+                    )
+            # TODO log rewards
+            loss, chosen_rewards, rejected_rewards = dpo_loss(
+                model_out_dict["policy_chosen"].logits,
+                model_out_dict["policy_rejected"].logits,
+                model_out_dict["reference_chosen"].logits,
+                model_out_dict["reference_rejected"].logits,
             )
-            model_out_chosen = self.model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                labels=batch["labels"],
-            )
-            return outputs.loss
+            return loss
+        else:
+            raise ValueError(f"Invalid tuning type: {self.tuning_type}")
 
     def training_step(self, batch, batch_idx):
         loss = self._step(batch)

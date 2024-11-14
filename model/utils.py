@@ -95,7 +95,7 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = dataset["test"]
 
         ensure_directory(self.cache_dir, clear=False)
-        logger.info(f"Processing dataset for stage {stage}, workers: {self.cpu_count}")
+        logger.info(f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}")
 
         self.train_dataset = self.train_dataset.map(
             self.process_samples_batch,
