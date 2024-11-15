@@ -207,7 +207,7 @@ class UltraFeedbackDataModule(SmDataset):
 
         self.cache_dir = "dataset_caches/ultrafeedback"
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
-        self.cpu_count = 1
+        self.cpu_count = 12
         self.max_token_length = max_token_length
 
     def setup(self, stage: Optional[str] = None):

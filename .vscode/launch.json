@@ -32,5 +32,15 @@
                 "PYDEVD_DISABLE_FILE_VALIDATION": "1"
             }
         },
+        {
+            "name": "Train",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1"
+            }
+        },
     ]
 }

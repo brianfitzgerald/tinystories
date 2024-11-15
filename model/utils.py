@@ -34,7 +34,7 @@ class ModelChoice(Enum):
 @dataclass
 class LMHyperParams:
     base_model_checkpoint: str = "google/flan-t5-small"
-    tokenizer_checkpoint: Optional[str] = "google/flan-t5-small"
+    tokenizer_checkpoint: Optional[str] = None
     max_seq_length: int = 2048
     learning_rate: float = 3e-4
     adam_epsilon: float = 1e-8
@@ -150,7 +150,7 @@ class SmDataset(pl.LightningDataModule):
         }
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.cpu_count)  # type: ignore
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.cpu_count)  # type: ignore
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=8, num_workers=self.cpu_count)  # type: ignore

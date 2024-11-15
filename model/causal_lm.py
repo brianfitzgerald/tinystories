@@ -69,6 +69,12 @@ class AutoLMFineTuner(SmModel):
             logger.info(f"Using DPO with LoraConfig: {self.peft_config}")
             self.reference_model = create_reference_model(self.model) # type: ignore
             self.model = get_peft_model(self.model, self.peft_config)  # type: ignore
+            self.bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
 
         self.ckpt_name = params.base_model_checkpoint
         self.train_steps = 0
@@ -78,13 +84,6 @@ class AutoLMFineTuner(SmModel):
 
         assert self.model.generation_config
         self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
-
-        self.bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
 
     def forward(self, input_ids, attention_mask, labels):
         out = self.model(

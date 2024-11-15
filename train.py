@@ -28,6 +28,7 @@ from dataset.squad import (
     SquadExtractiveQADataModule,
     SquadDataModule,
     DollyEntityExtractionDataModule,
+    UltraFeedbackDataModule,
 )
 from dataset.parti import PromptUpsampleDataModule
 from dataset.pretrain import BertPretrainDataset, TinyStoriesDataset
@@ -159,12 +160,25 @@ CONFIGS = {
         "phi-dolly-ie",
         SMOL_LM_HPARAMS,
     ),
+    "qwen_dpo": ModelConfig(
+        AutoLMFineTuner,
+        UltraFeedbackDataModule,
+        "qwen-dpo",
+        LMHyperParams(
+            base_model_checkpoint="Qwen/Qwen2.5-0.5B",
+            warmup_steps_count=10,
+            tuning_type="dpo",
+            train_batch_size=1,
+            gradient_accumulation_steps=1,
+            optimizer="AdamW",
+        ),
+    ),
 }
 
 
 def main(
     wandb: bool = False,
-    config: str = "smol_dolly",
+    config: str = "qwen_dpo",
     run_name: Optional[str] = None,
     **kwargs,
 ):
@@ -277,13 +291,13 @@ def start_training(
         val_check_interval=0.1,
         callbacks=[
             # sample_callback,
-            checkpoint_callback,
-            progress_bar_callback,
-            learning_rate_callback,
-            gradient_norm_callback,
+            # checkpoint_callback,
+            # progress_bar_callback,
+            # learning_rate_callback,
+            # gradient_norm_callback,
         ],
-        logger=loggers,
-        log_every_n_steps=1,
+        # logger=loggers,
+        # log_every_n_steps=1,
     )
     trainer.fit(model, datamodule=data_module)
 
