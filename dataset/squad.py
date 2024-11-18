@@ -8,10 +8,13 @@ import torch.nn.functional as F
 from typing import Optional
 from loguru import logger
 from datasets import load_dataset
+from datasets.arrow_dataset import Dataset
 
 from transformers.tokenization_utils import PreTrainedTokenizer
-from synthetic_data.utils import ExtractiveQARow, ShareGPTConversation
+from synthetic_data.utils import ShareGPTConversation
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
+from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+from tqdm import tqdm
 
 from model.utils import SmDataset, IGNORE_TOKEN_INDEX, ensure_directory
 
@@ -202,6 +205,7 @@ class UltraFeedbackDataModule(SmDataset):
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
+        max_samples: Optional[int] = None,
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
@@ -209,12 +213,16 @@ class UltraFeedbackDataModule(SmDataset):
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
         self.cpu_count = 12
         self.max_token_length = max_token_length
+        self.max_samples = max_samples
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
 
         # Load dataset and split
-        dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset(self.dataset_name)["train"] # type: ignore
+        if self.max_samples:
+            dataset = dataset.select(range(self.max_samples)) # type: ignore
+        dataset = dataset.train_test_split(test_size=0.1) # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -267,3 +275,35 @@ class UltraFeedbackDataModule(SmDataset):
             for key, value in tokenized.items():
                 out_dict[f"{response_role}_{key}"] = value
         return out_dict
+
+    def precompute_reference_logprobs(self, reference_model: AutoModelForCausalLM):
+        with torch.no_grad():
+            for batch in tqdm(
+                self.train_dataloader(), desc="Precomputing reference logprobs"
+            ):
+                out = {}
+                for role in ["chosen", "rejected"]:
+                    for tensor_name in ["input_ids", "attention_mask", "labels"]:
+                        batch[f"{role}_{tensor_name}"] = batch[
+                            f"{role}_{tensor_name}"
+                        ].to(
+                            reference_model.device  # type: ignore
+                        )
+                    log_probs = reference_model(
+                        batch[f"{role}_input_ids"],
+                        attention_mask=batch[f"{role}_attention_mask"],
+                        labels=batch[f"{role}_labels"],
+                    ).logits  # type: ignore
+                    out[f"{role}_ref_log_probs"] = log_probs
+
+            for key in out.keys():
+                out[key] = out[key].cpu()
+
+            self.train_dataset = self.train_dataset.add_column(
+                name="chosen_ref_log_probs", column=out["chosen_ref_log_probs"]
+            ) # type: ignore
+            self.train_dataset = self.train_dataset.add_column(
+                name="rejected_ref_log_probs", column=out["rejected_ref_log_probs"]
+            )
+
+            return out
