@@ -11,7 +11,7 @@ from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
 
 from transformers.tokenization_utils import PreTrainedTokenizer
-from synthetic_data.utils import ShareGPTConversation
+from synthetic_data.utils import ShareGPTConversation, ldictl
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from tqdm import tqdm
@@ -260,6 +260,7 @@ class UltraFeedbackDataModule(SmDataset):
         # Set format for PyTorch
         self.train_dataset.set_format(type="torch", columns=columns)
         self.val_dataset.set_format(type="torch", columns=columns)
+        self.train_cached_logprobs = None
 
     def process_samples_batch(self, examples: dict):
         inputs, labels = {"rejected": [], "chosen": []}, {"rejected": [], "chosen": []}
@@ -278,6 +279,7 @@ class UltraFeedbackDataModule(SmDataset):
 
     def precompute_reference_logprobs(self, reference_model: AutoModelForCausalLM):
         with torch.no_grad():
+            samples = []
             for batch in tqdm(
                 self.train_dataloader(), desc="Precomputing reference logprobs"
             ):
@@ -295,15 +297,10 @@ class UltraFeedbackDataModule(SmDataset):
                         labels=batch[f"{role}_labels"],
                     ).logits  # type: ignore
                     out[f"{role}_ref_log_probs"] = log_probs
-
-            for key in out.keys():
-                out[key] = out[key].cpu()
-
-            self.train_dataset = self.train_dataset.add_column(
-                name="chosen_ref_log_probs", column=out["chosen_ref_log_probs"]
-            ) # type: ignore
-            self.train_dataset = self.train_dataset.add_column(
-                name="rejected_ref_log_probs", column=out["rejected_ref_log_probs"]
-            )
-
-            return out
+                for key in out.keys():
+                    out[key] = out[key].float().cpu()
+                samples.append(out)
+            logger.info("Converting dataset")
+            self.train_cached_logprobs = Dataset.from_dict(ldictl(samples)) # type: ignore
+            logger.info("Saving dataset")
+            self.train_cached_logprobs.save_to_disk(f"{self.cache_dir}/train_logprobs")

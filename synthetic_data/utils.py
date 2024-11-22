@@ -233,7 +233,7 @@ def ldictl(dict_of_lists):
     """
     List of dicts to dict of lists.
     """
-    return [dict(zip(dict_of_lists, t)) for t in zip(*dict_of_lists.values())]
+    return {key: [d[key] for d in dict_of_lists] for key in dict_of_lists[0]} if dict_of_lists else {}
 
 
 def dictl(dict_of_lists):
