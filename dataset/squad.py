@@ -301,6 +301,4 @@ class UltraFeedbackDataModule(SmDataset):
                     out[key] = out[key].float().cpu()
                 samples.append(out)
             logger.info("Converting dataset")
-            self.train_cached_logprobs = Dataset.from_dict(ldictl(samples)) # type: ignore
-            logger.info("Saving dataset")
-            self.train_cached_logprobs.save_to_disk(f"{self.cache_dir}/train_logprobs")
+            self.train_cached_logprobs = ldictl(samples)

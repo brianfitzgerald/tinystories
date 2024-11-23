@@ -607,6 +607,16 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6b/b6/82c7e601d6d3c3278c40b7bd35e17e82aa227f050aa9f66cb7b7fce29471/fire-0.7.0.tar.gz", hash = "sha256:961550f07936eaf65ad1dc8360f2b2bf8408fad46abbfa4d2a3794f8d2a95cdf", size = 87189 }
 
 [[package]]
+name = "flash-attn"
+version = "2.7.0.post2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/40/2c/90bf7f2b4800708e3a8a62694c935283b492384a0a791cfefbedd9138e1b/flash_attn-2.7.0.post2.tar.gz", hash = "sha256:62244de20dabad9a42d0636f6b2ea4c051d33df179a0b3bea4352502ebca1466", size = 2657246 }
+
+[[package]]
 name = "fonttools"
 version = "4.54.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2344,6 +2354,7 @@ dependencies = [
     { name = "einops" },
     { name = "evaluate" },
     { name = "fire" },
+    { name = "flash-attn" },
     { name = "fsspec" },
     { name = "huggingface-hub" },
     { name = "ipykernel" },
@@ -2386,6 +2397,7 @@ requires-dist = [
     { name = "einops" },
     { name = "evaluate" },
     { name = "fire" },
+    { name = "flash-attn", specifier = ">=2.7.0.post2" },
     { name = "fsspec", specifier = "==2023.10.0" },
     { name = "huggingface-hub" },
     { name = "ipykernel", specifier = ">=6.29.5" },
