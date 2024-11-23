@@ -72,6 +72,7 @@ class SmDataset(pl.LightningDataModule):
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
+        use_cache: bool = True,
     ):
         super().__init__()
 
@@ -85,6 +86,7 @@ class SmDataset(pl.LightningDataModule):
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
         self.dataset_name = "roborovski/squad-extractive-qa"
+        self.use_cache = use_cache
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
@@ -95,12 +97,14 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = dataset["test"]
 
         ensure_directory(self.cache_dir, clear=False)
-        logger.info(f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}")
+        logger.info(
+            f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}"
+        )
 
         self.train_dataset = self.train_dataset.map(
             self.process_samples_batch,
             batched=True,
-            load_from_cache_file=True,
+            load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
             num_proc=self.cpu_count,
         )
@@ -108,7 +112,7 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = self.val_dataset.map(
             self.process_samples_batch,
             batched=True,
-            load_from_cache_file=True,
+            load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
             num_proc=self.cpu_count,
         )

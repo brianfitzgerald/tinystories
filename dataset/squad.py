@@ -206,12 +206,13 @@ class UltraFeedbackDataModule(SmDataset):
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
         max_samples: Optional[int] = None,
+        use_cache: bool = True
     ):
-        super().__init__(batch_size, tokenizer, max_token_length)
+        super().__init__(batch_size, tokenizer, max_token_length, use_cache)
 
         self.cache_dir = "dataset_caches/ultrafeedback"
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
-        self.cpu_count = 12
+        self.num_workers = 12
         self.max_token_length = max_token_length
         self.max_samples = max_samples
 
@@ -219,86 +220,69 @@ class UltraFeedbackDataModule(SmDataset):
         logger.info(f"Loading dataset for stage {stage}")
 
         # Load dataset and split
-        dataset = load_dataset(self.dataset_name)["train"] # type: ignore
+        dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
         if self.max_samples:
-            dataset = dataset.select(range(self.max_samples)) # type: ignore
-        dataset = dataset.train_test_split(test_size=0.1) # type: ignore
+            dataset = dataset.select(range(self.max_samples))  # type: ignore
+        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
         ensure_directory(self.cache_dir, clear=False)
         logger.info(
-            f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}"
+            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
         )
 
         self.train_dataset = self.train_dataset.map(
             self.process_samples_batch,
             batched=True,
-            load_from_cache_file=True,
+            load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
-            num_proc=self.cpu_count,
+            num_proc=self.num_workers,
         )
 
         self.val_dataset = self.val_dataset.map(
             self.process_samples_batch,
             batched=True,
-            load_from_cache_file=True,
+            load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
-            num_proc=self.cpu_count,
+            num_proc=self.num_workers,
         )
+
         # TODO offline generate reference logps
+        # TODO filter by p95 length, and compute max length for tokenization
 
         columns = [
             "chosen_input_ids",
             "chosen_attention_mask",
-            "chosen_labels",
             "rejected_input_ids",
             "rejected_attention_mask",
-            "rejected_labels",
+            "prompt_input_ids",
+            "prompt_attention_mask",
         ]
 
         # Set format for PyTorch
         self.train_dataset.set_format(type="torch", columns=columns)
         self.val_dataset.set_format(type="torch", columns=columns)
-        self.train_cached_logprobs = None
+
+    COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
 
     def process_samples_batch(self, examples: dict):
-        inputs, labels = {"rejected": [], "chosen": []}, {"rejected": [], "chosen": []}
+        cols_to_tokenize = {k: [] for k in self.COLS_TO_TOKENIZE}
         for i in range(len(examples["source"])):
             example = {k: v[i] for k, v in examples.items()}
             triplets = create_triplets(example, self.tokenizer)
-            for response_role in ["chosen", "rejected"]:
-                inputs[response_role].append(triplets["prompt"])
-                labels[response_role].append(triplets[response_role])
+            for response_role in self.COLS_TO_TOKENIZE:
+                cols_to_tokenize[response_role].append(triplets[response_role])
         out_dict = {}
-        for response_role in ["chosen", "rejected"]:
-            tokenized = self._tokenize(inputs[response_role], labels[response_role])
+        for response_role in self.COLS_TO_TOKENIZE:
+            tokenized = self.tokenizer(
+                cols_to_tokenize[response_role],
+                padding="max_length",
+                max_length=self.max_token_length,
+                truncation=True,
+                return_tensors="pt",
+            )
             for key, value in tokenized.items():
                 out_dict[f"{response_role}_{key}"] = value
+        print(out_dict.keys())
         return out_dict
-
-    def precompute_reference_logprobs(self, reference_model: AutoModelForCausalLM):
-        with torch.no_grad():
-            samples = []
-            for batch in tqdm(
-                self.train_dataloader(), desc="Precomputing reference logprobs"
-            ):
-                out = {}
-                for role in ["chosen", "rejected"]:
-                    for tensor_name in ["input_ids", "attention_mask", "labels"]:
-                        batch[f"{role}_{tensor_name}"] = batch[
-                            f"{role}_{tensor_name}"
-                        ].to(
-                            reference_model.device  # type: ignore
-                        )
-                    log_probs = reference_model(
-                        batch[f"{role}_input_ids"],
-                        attention_mask=batch[f"{role}_attention_mask"],
-                        labels=batch[f"{role}_labels"],
-                    ).logits  # type: ignore
-                    out[f"{role}_ref_log_probs"] = log_probs
-                for key in out.keys():
-                    out[key] = out[key].float().cpu()
-                samples.append(out)
-            logger.info("Converting dataset")
-            self.train_cached_logprobs = ldictl(samples)
