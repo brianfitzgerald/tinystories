@@ -221,6 +221,7 @@ class UltraFeedbackDataModule(SmDataset):
 
         # Load dataset and split
         dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
+        logger.info(f"Loaded dataset with {len(dataset)} samples")
         if self.max_samples:
             dataset = dataset.select(range(self.max_samples))  # type: ignore
         dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
