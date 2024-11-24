@@ -56,7 +56,3 @@ torchaudio = { index = "pytorch-cu121" }
 name = "pytorch-cu121"
 url = "https://download.pytorch.org/whl/cu121"
 explicit = true
-
-
-[build-system]
-requires = ["ninja", "packaging"]

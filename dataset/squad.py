@@ -252,12 +252,9 @@ class UltraFeedbackDataModule(SmDataset):
         # TODO filter by p95 length, and compute max length for tokenization
 
         columns = [
-            "chosen_input_ids",
-            "chosen_attention_mask",
-            "rejected_input_ids",
-            "rejected_attention_mask",
-            "prompt_input_ids",
-            "prompt_attention_mask",
+            "prompt",
+            "rejected",
+            "chosen"
         ]
 
         # Set format for PyTorch
@@ -267,22 +264,10 @@ class UltraFeedbackDataModule(SmDataset):
     COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
 
     def process_samples_batch(self, examples: dict):
-        cols_to_tokenize = {k: [] for k in self.COLS_TO_TOKENIZE}
+        out_dict = {k: [] for k in self.COLS_TO_TOKENIZE}
         for i in range(len(examples["source"])):
             example = {k: v[i] for k, v in examples.items()}
             triplets = create_triplets(example, self.tokenizer)
             for response_role in self.COLS_TO_TOKENIZE:
-                cols_to_tokenize[response_role].append(triplets[response_role])
-        out_dict = {}
-        for response_role in self.COLS_TO_TOKENIZE:
-            tokenized = self.tokenizer(
-                cols_to_tokenize[response_role],
-                padding="max_length",
-                max_length=self.max_token_length,
-                truncation=True,
-                return_tensors="pt",
-            )
-            for key, value in tokenized.items():
-                out_dict[f"{response_role}_{key}"] = value
-        print(out_dict.keys())
+                out_dict[response_role].append(triplets[response_role])
         return out_dict

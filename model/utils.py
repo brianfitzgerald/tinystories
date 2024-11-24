@@ -81,7 +81,7 @@ class SmDataset(pl.LightningDataModule):
         self.batch_size = batch_size
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
-        self.cpu_count = min(len(os.sched_getaffinity(0)), 32)
+        self.num_workers = min(len(os.sched_getaffinity(0)), 32)
         # self.cpu_count = 1
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
@@ -98,7 +98,7 @@ class SmDataset(pl.LightningDataModule):
 
         ensure_directory(self.cache_dir, clear=False)
         logger.info(
-            f"Processing dataset for stage {stage}, workers: {self.cpu_count}, cache dir {self.cache_dir}"
+            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
         )
 
         self.train_dataset = self.train_dataset.map(
@@ -106,7 +106,7 @@ class SmDataset(pl.LightningDataModule):
             batched=True,
             load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
-            num_proc=self.cpu_count,
+            num_proc=self.num_workers,
         )
 
         self.val_dataset = self.val_dataset.map(
@@ -114,7 +114,7 @@ class SmDataset(pl.LightningDataModule):
             batched=True,
             load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
-            num_proc=self.cpu_count,
+            num_proc=self.num_workers,
         )
 
         columns = [
@@ -154,10 +154,10 @@ class SmDataset(pl.LightningDataModule):
         }
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.cpu_count)  # type: ignore
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers)  # type: ignore
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=8, num_workers=self.cpu_count)  # type: ignore
+        return DataLoader(self.val_dataset, batch_size=8, num_workers=self.num_workers)  # type: ignore
 
 
 class SmModel(pl.LightningModule):
