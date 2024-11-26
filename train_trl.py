@@ -1,26 +1,20 @@
 import torch
-import sys
-from model.utils import LMHyperParams, SmModel, ModelChoice
 from synthetic_data.utils import dictl
 from dataset.squad import UltraFeedbackDataModule
 from transformers import AutoTokenizer, PreTrainedTokenizer
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft.tuners.lora.config import LoraConfig
-from transformers import TrainingArguments
 from trl import DPOTrainer, DPOConfig
-from typing import cast
-from peft.peft_model import PeftModel
-import gc
 from torch.amp.autocast_mode import autocast
 import fire
 from dataclasses import dataclass
 from loguru import logger
 from tqdm import tqdm
 from trl.trainer.dpo_trainer import PreferenceCollator
-from typing import Dict
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
+SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
 @dataclass
 class RLConfig:
@@ -28,7 +22,7 @@ class RLConfig:
     single_process_mode: bool = False
     max_seq_length: int = 1512
     prompt_length: int = 1024
-    max_samples = 1000
+    max_samples: int = 1000
 
 
 class TrainerWrapper:
@@ -54,7 +48,10 @@ class TrainerWrapper:
             quantization_config=bnb_config,
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id)  # type: ignore
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
+        self.tokenizer.add_special_tokens({'pad_token': '<PAD>'})
+        self.model.resize_token_embeddings(len(self.tokenizer))
+        # self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
     
@@ -110,6 +107,7 @@ class TrainerWrapper:
         )
 
 
+        logger.info("Initializing DPOTrainer")
         self.trainer = DPOTrainer(
             self.model,
             ref_model=None,  # set to none since we use peft
@@ -120,36 +118,43 @@ class TrainerWrapper:
             tokenizer=self.tokenizer,  # type: ignore
         )
 
-    def compute_loss_metrics(self):
+    def compute_loss_metrics(self, batch_size: int = 1):
+        """
+        Iterate through all batches and compute metrics sample-wise.
+        Keep on batch_size=1 unless needed
+        """
         assert self.trainer._peft_has_been_casted_to_bf16
         # precompute reference logprobs
         self.trainer.get_train_dataloader()
         collator = PreferenceCollator(self.tokenizer.pad_token_id, "pt")  # type: ignore
-        batch_size = 1
         outputs = []
         with torch.no_grad(), autocast("cuda"):
-            for batch in tqdm(
+            for i, batch in enumerate(tqdm(
                 self.trainer.train_dataset.iter(batch_size=batch_size),
                 desc="Computing DPO loss",
                 total=len(self.trainer.train_dataset) // batch_size,
-            ):
+            )):
                 sample_collated = collator(dictl(batch))
                 metrics = self.get_sample_wise_metrics(sample_collated)
-                for i in range(batch_size):
+                for j in range(batch_size):
                     out_sample = {
-                        "prompt": batch["prompt"][i],
-                        "chosen": batch["chosen"][i],
-                        "rejected": batch["rejected"][i],
+                        "prompt": batch["prompt"][j],
+                        "chosen": batch["chosen"][j],
+                        "rejected": batch["rejected"][j],
                     }
                     for k, v in metrics.items():
                         if isinstance(v, list):
-                            out_sample[k] = v[i]
+                            out_sample[k] = v[j]
                         else:
                             out_sample[k] = v
                     outputs.append(out_sample)
+                    print(i, metrics)
         return outputs
 
     def get_sample_wise_metrics(self, batch: dict):
+        """
+        Return sample-wise loss metrics for a single batch
+        """
         metrics = {}
 
         model_output = self.trainer.concatenated_forward(self.model, batch) # type: ignore
