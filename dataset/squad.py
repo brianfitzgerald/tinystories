@@ -176,9 +176,9 @@ def create_triplets(
     rejected_messages = rec_extract_assistant_messages(example["rejected"])
 
     return {
-        "prompt": tokenizer.apply_chat_template(prompt_messages, tokenize=False),
-        "chosen": tokenizer.apply_chat_template(chosen_messages, tokenize=False),
-        "rejected": tokenizer.apply_chat_template(rejected_messages, tokenize=False),
+        "prompt": prompt_messages,
+        "chosen": chosen_messages,
+        "rejected": rejected_messages,
     }
 
 

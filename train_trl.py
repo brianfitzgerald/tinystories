@@ -11,10 +11,12 @@ from dataclasses import dataclass
 from loguru import logger
 from tqdm import tqdm
 from trl.trainer.dpo_trainer import PreferenceCollator
+from peft.utils.constants import DUMMY_TARGET_MODULES
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
+
 
 @dataclass
 class RLConfig:
@@ -23,6 +25,7 @@ class RLConfig:
     max_seq_length: int = 1512
     prompt_length: int = 1024
     max_samples: int = 1000
+    batch_size: int = 2
 
 
 class TrainerWrapper:
@@ -49,14 +52,20 @@ class TrainerWrapper:
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id)  # type: ignore
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
-        self.tokenizer.add_special_tokens({'pad_token': '<PAD>'})
+        self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
         self.model.resize_token_embeddings(len(self.tokenizer))
         # self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
-    
-    def init_data_module(self):
-        self.data_module = UltraFeedbackDataModule(2, self.tokenizer, self.config.max_seq_length, self.config.max_samples, False)
+
+    def init_data_module(self, use_cache: bool = True):
+        self.data_module = UltraFeedbackDataModule(
+            self.config.batch_size,
+            self.tokenizer,
+            self.config.max_seq_length,
+            self.config.max_samples,
+            use_cache,
+        )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
         self.data_module.setup("fit")
@@ -71,8 +80,12 @@ class TrainerWrapper:
             target_modules="all-linear",
             task_type="CAUSAL_LM",
         )
-        
+
         n_workers = 0 if self.config.single_process_mode else 4
+
+        if self.model is not None and hasattr(self.model, "peft_config"):
+            logger.info("LoRA already loaded")
+            peft_config.target_modules = DUMMY_TARGET_MODULES
 
         args = DPOConfig(
             output_dir="../outputs",
@@ -106,7 +119,6 @@ class TrainerWrapper:
             loss_type="sigmoid",
         )
 
-
         logger.info("Initializing DPOTrainer")
         self.trainer = DPOTrainer(
             self.model,
@@ -129,11 +141,13 @@ class TrainerWrapper:
         collator = PreferenceCollator(self.tokenizer.pad_token_id, "pt")  # type: ignore
         outputs = []
         with torch.no_grad(), autocast("cuda"):
-            for i, batch in enumerate(tqdm(
-                self.trainer.train_dataset.iter(batch_size=batch_size),
-                desc="Computing DPO loss",
-                total=len(self.trainer.train_dataset) // batch_size,
-            )):
+            for i, batch in enumerate(
+                tqdm(
+                    self.trainer.train_dataset.iter(batch_size=batch_size),
+                    desc="Computing DPO loss",
+                    total=len(self.trainer.train_dataset) // batch_size,
+                )
+            ):
                 sample_collated = collator(dictl(batch))
                 metrics = self.get_sample_wise_metrics(sample_collated)
                 for j in range(batch_size):
@@ -157,14 +171,16 @@ class TrainerWrapper:
         """
         metrics = {}
 
-        model_output = self.trainer.concatenated_forward(self.model, batch) # type: ignore
+        model_output = self.trainer.concatenated_forward(self.model, batch)  # type: ignore
 
         # if ref_chosen_logps and ref_rejected_logps in batch use them, otherwise use the reference model
         if "ref_chosen_logps" in batch and "ref_rejected_logps" in batch:
             ref_chosen_logps = batch["ref_chosen_logps"]
             ref_rejected_logps = batch["ref_rejected_logps"]
         else:
-            ref_chosen_logps, ref_rejected_logps = self.trainer.compute_ref_log_probs(batch)
+            ref_chosen_logps, ref_rejected_logps = self.trainer.compute_ref_log_probs(
+                batch
+            )
 
         losses, chosen_rewards, rejected_rewards = self.trainer.dpo_loss(
             model_output["chosen_logps"],
@@ -192,12 +208,14 @@ class TrainerWrapper:
         logger.info("Training model")
         self.trainer.train()
 
+
 def main():
     cfg = RLConfig()
     wrapper = TrainerWrapper(cfg)
     wrapper.init_model()
     wrapper.init_data_module()
     wrapper.init_trainer()
+
 
 if __name__ == "__main__":
     fire.Fire(main)
