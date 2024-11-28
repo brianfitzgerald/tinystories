@@ -9,4 +9,4 @@
 #SBATCH --partition=p5
 #SBATCH --priority=normal
 
-python train.py --wandb --run_name adafactor_fix
+python train_trl.py
