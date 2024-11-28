@@ -141,13 +141,12 @@ class TrainerWrapper:
         collator = PreferenceCollator(self.tokenizer.pad_token_id, "pt")  # type: ignore
         outputs = []
         with torch.no_grad(), autocast("cuda"):
-            for i, batch in enumerate(
-                tqdm(
-                    self.trainer.train_dataset.iter(batch_size=batch_size),
-                    desc="Computing DPO loss",
-                    total=len(self.trainer.train_dataset) // batch_size,
-                )
-            ):
+            batch_iter = tqdm(
+                self.trainer.train_dataset.iter(batch_size=batch_size),
+                desc="Computing DPO loss",
+                total=len(self.trainer.train_dataset) // batch_size,
+            )
+            for batch in batch_iter:
                 sample_collated = collator(dictl(batch))
                 metrics = self.get_sample_wise_metrics(sample_collated)
                 for j in range(batch_size):
@@ -162,7 +161,7 @@ class TrainerWrapper:
                         else:
                             out_sample[k] = v
                     outputs.append(out_sample)
-                    print(i, metrics)
+                    batch_iter.set_postfix(out_sample)
         return outputs
 
     def get_sample_wise_metrics(self, batch: dict):
@@ -195,11 +194,15 @@ class TrainerWrapper:
             "loss": losses.tolist(),
             "reward_accuracy": reward_accuracies.tolist(),
             "reward_margin": reward_margins.tolist(),
+            "chosen_rewards": chosen_rewards.tolist(),
+            "rejected_rewards": rejected_rewards.tolist(),
         }
 
         for k in [
             "chosen_logps",
             "rejected_logps",
+            "mean_chosen_logits",
+            "mean_rejected_logits",
         ]:
             metrics[k] = model_output[k].tolist()
         return metrics
