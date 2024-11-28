@@ -206,7 +206,8 @@ class UltraFeedbackDataModule(SmDataset):
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
         max_samples: Optional[int] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        use_filtered_logprobs: bool = False,
     ):
         super().__init__(batch_size, tokenizer, max_token_length, use_cache)
 
@@ -215,58 +216,65 @@ class UltraFeedbackDataModule(SmDataset):
         self.num_workers = 12
         self.max_token_length = max_token_length
         self.max_samples = max_samples
+        self.use_filtered_logprobs = use_filtered_logprobs
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
 
-        # Load dataset and split
-        dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
-        logger.info(f"Loaded dataset with {len(dataset)} samples")
-        if self.max_samples:
-            dataset = dataset.select(range(self.max_samples))  # type: ignore
-        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
-        self.train_dataset = dataset["train"]
-        self.val_dataset = dataset["test"]
+        if self.use_filtered_logprobs:
+            self.filtered_logprobs_dataset = Dataset.from_parquet(
+                "dpo_scores_sorted.parquet"
+            )
+            self.filtered_logprobs_dataset = self.filtered_logprobs_dataset.train_test_split(
+                test_size=0.1
+            )
+            self.train_dataset = self.filtered_logprobs_dataset["train"]
+            self.val_dataset = self.filtered_logprobs_dataset["test"]
+        else:
+            # Load dataset and split
+            dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
+            logger.info(f"Loaded dataset with {len(dataset)} samples")
+            if self.max_samples:
+                dataset = dataset.select(range(self.max_samples))  # type: ignore
+            dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
+            self.train_dataset = dataset["train"]
+            self.val_dataset = dataset["test"]
 
-        ensure_directory(self.cache_dir, clear=False)
-        logger.info(
-            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
-        )
+            ensure_directory(self.cache_dir, clear=False)
+            logger.info(
+                f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
+            )
 
-        self.train_dataset = self.train_dataset.map(
-            self.process_samples_batch,
-            batched=True,
-            load_from_cache_file=self.use_cache,
-            cache_file_name=f"{self.cache_dir}/training.parquet",
-            num_proc=self.num_workers,
-        )
+            self.train_dataset = self.train_dataset.map(
+                self.process_samples_batch,
+                batched=True,
+                load_from_cache_file=self.use_cache,
+                cache_file_name=f"{self.cache_dir}/training.parquet",
+                num_proc=self.num_workers,
+            )
 
-        self.val_dataset = self.val_dataset.map(
-            self.process_samples_batch,
-            batched=True,
-            load_from_cache_file=self.use_cache,
-            cache_file_name=f"{self.cache_dir}/validation.parquet",
-            num_proc=self.num_workers,
-        )
+            self.val_dataset = self.val_dataset.map(
+                self.process_samples_batch,
+                batched=True,
+                load_from_cache_file=self.use_cache,
+                cache_file_name=f"{self.cache_dir}/validation.parquet",
+                num_proc=self.num_workers,
+            )
 
-        # TODO offline generate reference logps
-        # TODO filter by p95 length, and compute max length for tokenization
+            # TODO offline generate reference logps
+            # TODO filter by p95 length, and compute max length for tokenization
 
-        columns = [
-            "prompt",
-            "rejected",
-            "chosen"
-        ]
+            columns = ["prompt", "rejected", "chosen"]
 
-        # Set format for PyTorch
-        self.train_dataset.set_format(type="torch", columns=columns)
-        self.val_dataset.set_format(type="torch", columns=columns)
+            # Set format for PyTorch
+            self.train_dataset.set_format(type="torch", columns=columns)
+            self.val_dataset.set_format(type="torch", columns=columns)
 
     COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
 
     def process_samples_batch(self, examples: dict):
         out_dict = {k: [] for k in self.COLS_TO_TOKENIZE}
-        for i in range(len(examples["source"])):
+        for i in range(len(examples["prompt"])):
             example = {k: v[i] for k, v in examples.items()}
             triplets = create_triplets(example, self.tokenizer)
             for response_role in self.COLS_TO_TOKENIZE:

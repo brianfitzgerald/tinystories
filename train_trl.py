@@ -12,6 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 from trl.trainer.dpo_trainer import PreferenceCollator
 from peft.utils.constants import DUMMY_TARGET_MODULES
+from datasets import Dataset
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
@@ -19,18 +20,19 @@ SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
 
 @dataclass
-class RLConfig:
+class WrapperConfig:
     model_id: str = LLAMA_3_2_1B
     single_process_mode: bool = False
     max_seq_length: int = 1512
     prompt_length: int = 1024
     max_samples: int = 1000
     batch_size: int = 2
+    using_filtered_logprobs: bool = False
 
 
 class TrainerWrapper:
 
-    def __init__(self, config: RLConfig) -> None:
+    def __init__(self, config: WrapperConfig) -> None:
         self.config = config
 
     def init_model(self):
@@ -65,6 +67,7 @@ class TrainerWrapper:
             self.config.max_seq_length,
             self.config.max_samples,
             use_cache,
+            self.config.using_filtered_logprobs
         )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
@@ -213,12 +216,14 @@ class TrainerWrapper:
 
 
 def main():
-    cfg = RLConfig()
+    cfg = WrapperConfig(using_filtered_logprobs=True)
     wrapper = TrainerWrapper(cfg)
     wrapper.init_model()
     wrapper.init_data_module()
     wrapper.init_trainer()
 
+    logger.info("Starting training...")
+    wrapper.train()
 
 if __name__ == "__main__":
     fire.Fire(main)
