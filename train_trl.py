@@ -33,6 +33,11 @@ class WrapperConfig:
     using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
 
+LLAMA_3B_CONFIG = WrapperConfig(
+    model_id=LLAMA_3_2_3B,
+    max_samples=10000,
+    using_filtered_logprobs=True,
+)
 
 class TrainerWrapper:
 
@@ -220,12 +225,7 @@ class TrainerWrapper:
 
 
 def main(generate_logprobs: bool = False):
-    cfg = WrapperConfig(
-        model_id=LLAMA_3_2_3B,
-        using_filtered_logprobs=not generate_logprobs,
-        max_samples=10000,
-    )
-    wrapper = TrainerWrapper(cfg)
+    wrapper = TrainerWrapper(LLAMA_3B_CONFIG)
     wrapper.init_model()
     wrapper.init_data_module()
     wrapper.init_trainer()

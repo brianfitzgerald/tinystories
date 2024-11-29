@@ -44,6 +44,9 @@ dependencies = [
     "torchaudio==2.5.1+cu121",
     "torchvision==0.20.1+cu121",
     "flash-attn>=2.7.0.post2",
+    "fastapi>=0.115.5",
+    "uvicorn>=0.32.1",
+    "gradio>=5.7.1",
 ]
 
 
