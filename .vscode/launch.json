@@ -26,5 +26,15 @@
                 "--generate_logprobs"
             ],
         },
+        {
+            "name": "Inference - TRL",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run_inference.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--generate_logprobs"
+            ],
+        },
     ]
 }

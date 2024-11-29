@@ -1,15 +1,11 @@
-from pathlib import Path
 import torch
 from transformers import (
     GenerationConfig,
     TextIteratorStreamer,
-    TextStreamer,
-    StoppingCriteriaList,
 )
 from threading import Thread
 
 import fire
-from dotenv import load_dotenv
 from typing import Optional, List
 
 import uvicorn
@@ -35,28 +31,27 @@ def do_inference_api(
     batch = tokenizer(prompts, return_tensors="pt", add_special_tokens=True)
 
     with torch.no_grad():
-        max_tokens_val = max_tokens or 1024
+        max_tokens_val = max_tokens or 512
         generation_config = GenerationConfig(
-            repetition_penalty=1.1,
             max_new_tokens=max_tokens_val,
-            temperature=0.9,
-            top_p=0.95,
-            top_k=40,
             bos_token_id=tokenizer.bos_token_id,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.pad_token_id,
-            do_sample=True,
+            do_sample=False,
             use_cache=True,
             return_dict_in_generate=True,
             output_attentions=False,
             output_hidden_states=False,
             output_scores=False,
         )
+        logger.info(f"Generating with max_tokens={max_tokens_val}")
         generated = model.generate(
             inputs=batch["input_ids"].to(device),
             generation_config=generation_config,
         )
+    logger.info(f"Decoding response")
     decoded_responses = tokenizer.batch_decode(generated["sequences"].cpu().tolist())
+    logger.info(f"Decoded responses: {decoded_responses}")
     return decoded_responses
 
 
@@ -133,6 +128,7 @@ def main(
     app = FastAPI()
 
     wrapper = TrainerWrapper(LLAMA_3B_CONFIG)
+    logger.info("Initializing model")
     wrapper.init_model()
 
     model = wrapper.model.eval()
@@ -149,9 +145,13 @@ def main(
             return {"completions": completions}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/status")
+    async def get_status():
+        return {"status": "ok"}
 
     if gradio:
-        logger.info("Starting Gradio interface")
+        logger.info(f"Starting Gradio interface, using device {device}")
         do_inference_streaming(tokenizer, model, chat=True, device=device)
     else:
         logger.info("Starting API")
