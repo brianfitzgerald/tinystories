@@ -12,10 +12,13 @@ from loguru import logger
 from tqdm import tqdm
 from trl.trainer.dpo_trainer import PreferenceCollator
 from peft.utils.constants import DUMMY_TARGET_MODULES
-from datasets import Dataset
+import pandas as pd
+from typing import Optional
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
+LLAMA_3_2_3B = "meta-llama/Llama-3.2-3B-Instruct"
+LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
 
@@ -25,9 +28,10 @@ class WrapperConfig:
     single_process_mode: bool = False
     max_seq_length: int = 1512
     prompt_length: int = 1024
-    max_samples: int = 1000
+    max_samples: Optional[int] = None
     batch_size: int = 2
     using_filtered_logprobs: bool = False
+    root_dir: Optional[str] = None
 
 
 class TrainerWrapper:
@@ -67,7 +71,7 @@ class TrainerWrapper:
             self.config.max_seq_length,
             self.config.max_samples,
             use_cache,
-            self.config.using_filtered_logprobs
+            self.config.using_filtered_logprobs,
         )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
@@ -110,7 +114,7 @@ class TrainerWrapper:
             bf16=True,
             tf32=True,
             push_to_hub=False,
-            report_to="tensorboard",
+            report_to="wandb",
             # debugger will fail without this
             dataloader_num_workers=n_workers,
             dataset_num_proc=1,
@@ -215,15 +219,26 @@ class TrainerWrapper:
         self.trainer.train()
 
 
-def main():
-    cfg = WrapperConfig(using_filtered_logprobs=True)
+def main(generate_logprobs: bool = False):
+    cfg = WrapperConfig(
+        model_id=LLAMA_3_2_3B,
+        using_filtered_logprobs=not generate_logprobs,
+        max_samples=10000,
+    )
     wrapper = TrainerWrapper(cfg)
     wrapper.init_model()
     wrapper.init_data_module()
     wrapper.init_trainer()
 
-    logger.info("Starting training...")
-    wrapper.train()
+    if generate_logprobs:
+        logger.info("Computing loss metrics...")
+        outputs = wrapper.compute_loss_metrics()
+        pd.DataFrame(outputs).to_parquet("scored_sorted_logprobs.parquet")
+        return outputs
+    else:
+        logger.info("Starting training...")
+        wrapper.train()
+
 
 if __name__ == "__main__":
     fire.Fire(main)

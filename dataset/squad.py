@@ -9,6 +9,7 @@ from typing import Optional
 from loguru import logger
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
+import os
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 from synthetic_data.utils import ShareGPTConversation, ldictl
@@ -208,6 +209,7 @@ class UltraFeedbackDataModule(SmDataset):
         max_samples: Optional[int] = None,
         use_cache: bool = True,
         use_filtered_logprobs: bool = False,
+        project_dir: str = "",
     ):
         super().__init__(batch_size, tokenizer, max_token_length, use_cache)
 
@@ -217,16 +219,17 @@ class UltraFeedbackDataModule(SmDataset):
         self.max_token_length = max_token_length
         self.max_samples = max_samples
         self.use_filtered_logprobs = use_filtered_logprobs
+        self.project_dir = project_dir
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
 
         if self.use_filtered_logprobs:
             self.filtered_logprobs_dataset = Dataset.from_parquet(
-                "dpo_scores_sorted.parquet"
+                os.path.join(self.project_dir, "filtered_logprobs.parquet")
             )
-            self.filtered_logprobs_dataset = self.filtered_logprobs_dataset.train_test_split(
-                test_size=0.1
+            self.filtered_logprobs_dataset = (
+                self.filtered_logprobs_dataset.train_test_split(test_size=0.1) # type: ignore
             )
             self.train_dataset = self.filtered_logprobs_dataset["train"]
             self.val_dataset = self.filtered_logprobs_dataset["test"]

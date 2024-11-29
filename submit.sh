@@ -9,4 +9,4 @@
 #SBATCH --partition=p5
 #SBATCH --priority=normal
 
-python train_trl.py
+python train_trl.py --generate_logprobs

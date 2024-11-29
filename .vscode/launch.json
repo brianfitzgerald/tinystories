@@ -17,18 +17,14 @@
             // "args": ["--restart"],
         },
         {
-            "name": "Get Logprobs",
+            "name": "Train - TRL",
             "type": "debugpy",
             "request": "launch",
-            "program": "get_logprobs.py",
+            "program": "train_trl.py",
             "console": "integratedTerminal",
-        },
-        {
-            "name": "Train",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "train.py",
-            "console": "integratedTerminal",
+            "args": [
+                "--generate_logprobs"
+            ],
         },
     ]
 }
