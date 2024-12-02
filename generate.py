@@ -12,15 +12,8 @@ from dotenv import dotenv_values
 from huggingface_hub import login
 from tqdm import tqdm
 from synthetic_data.tasks import (
+    ALL_TASKS,
     CodeContests,
-    Goody2,
-    PromptUpsample,
-    BaseTask,
-    Toolformer,
-    SyntheticToolCalls,
-    SquadExtractiveQA,
-    DollyEntityExtraction,
-    HumanEval,
 )
 
 from synthetic_data.generation import (
@@ -32,20 +25,7 @@ from synthetic_data.generation import (
 )
 from synthetic_data.utils import (
     SeedDataFormat,
-    print_result_dicts,
 )
-
-DATA_TASKS: Dict[str, type[BaseTask]] = {
-    "toolformer": Toolformer,
-    "prompt_upsample": PromptUpsample,
-    "synthetic_tool_calls": SyntheticToolCalls,
-    "squad_extractive_qa": SquadExtractiveQA,
-    "dolly_entity_extraction": DollyEntityExtraction,
-    "goody": Goody2,
-    "humaneval": HumanEval,
-    "codecontests": CodeContests,
-}
-
 
 def main(
     upload_every_n_batches: int = 10,
@@ -66,7 +46,7 @@ def main(
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
     console = Console()
-    task = DATA_TASKS[task_name](console)
+    task = ALL_TASKS[task_name](console)
     split = task.seed_data_split
     logger.info("Logging into the Hub...")
     current_dir = os.path.dirname(os.path.abspath(__file__))

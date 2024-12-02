@@ -11,52 +11,24 @@ from rich.console import Console
 from rich.progress import Progress
 
 from evaluation.code_execution import evaluate_sample_humaneval, print_code_snippet
-from synthetic_data.generation import GeminiWrapper, GenerationWrapper
-from synthetic_data.tasks import BaseTask, DollyEntityExtraction, HumanEval
+from synthetic_data.generation import (
+    MODEL_WRAPPER_CLASSES,
+    GeminiWrapper,
+    GenerationSource,
+    GenerationWrapper,
+)
+from synthetic_data.tasks import ALL_TASKS, BaseTask, DollyEntityExtraction, HumanEval
 from synthetic_data.utils import Conversation, ldictl
-
-
-@dataclass
-class ModelConfig:
-    name: str
-    wrapper: GenerationWrapper
-
-
-@dataclass
-class EvalTask:
-    name: str
-    dataset_uri: str
-    task_class: type[BaseTask]
-
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
 
 
-MODEL_CONFIGS = [
-    # ModelConfig(name="GPT-4o", wrapper=OpenAIGenerationWrapper(dotenv)),
-    ModelConfig(
-        name="Gemini 1.5 Flash 8b",
-        wrapper=GeminiWrapper({}),
-    ),
-]
-
-
 async def sample_worker(
-    model_config: ModelConfig, prompt: List[Conversation], sample: Dict
+    model_wrapper: GenerationWrapper, prompt: List[Conversation], sample: Dict
 ):
-    out = await model_config.wrapper.generate([prompt])  # type: ignore
+    out = await model_wrapper.generate([prompt]) # type: ignore
     return out, sample
-
-
-TASKS = [
-    EvalTask(
-        "dolly-entity-extraction",
-        "roborovski/dolly-entity-extraction",
-        DollyEntityExtraction,
-    ),
-    EvalTask("humaneval", "openai/openai_humaneval", HumanEval),
-]
 
 
 def _print_test_results(err: Optional[str], results: List[bool], console: Console):
@@ -80,14 +52,18 @@ class EvalResult:
     evaluation_results: List[bool]
 
 
-async def main(max_concurrent: int = 16, task_name: str = "humaneval"):
-    eval_task = next(t for t in TASKS if t.name == task_name)
+async def main(
+    max_concurrent: int = 16,
+    task_name: str = "humaneval",
+    generation_source: GenerationSource = GenerationSource.OPENAI,
+):
+    task = ALL_TASKS[task_name]
     console = Console()
-    task = eval_task.task_class(console)
 
-    dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))["test"]
+    dataset = cast(Dataset, load_dataset(task.seed_data_location))["test"]
 
     console = Console()
+    model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
 
     eval_results: List[EvalResult] = []
 

@@ -2,7 +2,7 @@ from abc import ABC
 import sys
 import random
 import traceback
-from typing import Dict, List
+from typing import Dict, List, Literal
 from evaluation.code_execution import (
     evaluate_python_code_exec,
     evaluate_sample_humaneval,
@@ -51,6 +51,14 @@ from synthetic_data.utils import (
     get_matches,
 )
 
+EvalTaskType = Literal["code-eval-ast"]
+
+
+@dataclass
+class EvalTask(ABC):
+    dataset_uri: str
+    task_type: EvalTaskType
+
 
 class BaseTask(ABC):
     seed_data_format: SeedDataFormat = SeedDataFormat.SYNTHETIC
@@ -61,6 +69,8 @@ class BaseTask(ABC):
     output_dataset_org: str = "roborovski"
 
     dataset_columns: List[str] = []
+
+    eval_tasks: List[EvalTask] = [EvalTask("openai/openai_humaneval", "code-eval-ast")]
 
     def __init__(self, console: Console) -> None:
         super().__init__()
@@ -81,7 +91,7 @@ class BaseTask(ABC):
         """
         raise NotImplementedError
 
-    def format_inference_conversation(self, batch: Dict) -> List[Conversation]:
+    def format_inference_conversation(self, sample: Dict) -> List[Conversation]:
         """
         Prompt template to use for generating initial seed data.
         """
@@ -369,15 +379,6 @@ class SquadExtractiveQA(BaseTask):
         self.contexts = batch["context"]
         return [
             format_entity_extraction_conversation_template(prompt) for prompt in prompts
-        ]
-
-    def format_inference_conversation(self, batch: Dict) -> List[Conversation]:
-        prompts = batch["context"]
-        self.contexts = batch["context"]
-        return [
-            [
-                {"role": "system", "content": ENTITY_EXTRACTION_TUNING_INSTRUCTION},
-            ]
         ]
 
     def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
@@ -674,3 +675,15 @@ class CodeContests(HumanEval):
                 }
             )
         return res
+
+
+ALL_TASKS: Dict[str, type[BaseTask]] = {
+    "toolformer": Toolformer,
+    "prompt_upsample": PromptUpsample,
+    "synthetic_tool_calls": SyntheticToolCalls,
+    "squad_extractive_qa": SquadExtractiveQA,
+    "dolly_entity_extraction": DollyEntityExtraction,
+    "goody": Goody2,
+    "humaneval": HumanEval,
+    "codecontests": CodeContests,
+}
