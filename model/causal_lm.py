@@ -18,31 +18,6 @@ from peft.peft_model import PeftModel
 from typing import Tuple
 
 
-def dpo_loss(
-    policy_chosen_logps: T,
-    policy_rejected_logps: T,
-    reference_chosen_logps: T,
-    reference_rejected_logps: T,
-    beta: float = 1,
-) -> Tuple[T, T, T]:
-
-    chosen_ratio = policy_chosen_logps - reference_chosen_logps
-    rejected_ratio = policy_rejected_logps - reference_rejected_logps
-
-    chosen_ratio_scaled = beta * chosen_ratio
-    rejected_ratio_scaled = beta * rejected_ratio
-
-    losses = F.logsigmoid(chosen_ratio_scaled) - F.logsigmoid(rejected_ratio_scaled)
-
-    chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
-    rejected_rewards = (
-        beta * (policy_rejected_logps - reference_rejected_logps).detach()
-    )
-
-    return losses, chosen_rewards, rejected_rewards
-
-
-
 class AutoLMFineTuner(SmModel):
     def __init__(self, params: LMHyperParams) -> None:
         super().__init__(params)
