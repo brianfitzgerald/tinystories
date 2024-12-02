@@ -2,6 +2,7 @@ import asyncio
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, cast
+import pandas as pd
 
 from datasets import Dataset, load_dataset
 from dotenv import dotenv_values
@@ -16,7 +17,7 @@ from synthetic_data.generation import (
     GenerationWrapper,
 )
 from synthetic_data.tasks import ALL_TASKS
-from synthetic_data.utils import Conversation, ldictl
+from synthetic_data.utils import Conversation, dictl, extract_code_block, ldictl
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
@@ -51,7 +52,7 @@ class EvalResult:
 
 
 async def main(
-    max_concurrent: int = 16,
+    batch_size: int = 8,
     task_name: str = "humaneval",
     generation_source: GenerationSource = GenerationSource.OPENAI,
 ):
@@ -67,9 +68,9 @@ async def main(
 
     with Progress() as progress:
         prog_task = progress.add_task("Evaluating", total=len(dataset))
-        for batch in dataset.iter(batch_size=max_concurrent):  # type: ignore
+        for batch in dataset.iter(batch_size=batch_size):  # type: ignore
             all_futures = []
-            samples_batch = ldictl(batch)
+            samples_batch = dictl(batch)
             prompts_batch = [
                 task.format_inference_conversation(sample) for sample in samples_batch
             ]
@@ -84,7 +85,7 @@ async def main(
                     console.print(f"Function: {sample['entry_point']}")
                     console.print(f"Canonical solution:")
                     print_code_snippet(sample["canonical_solution"], console)
-                    generated_code = generated.replace("```", "").replace("python", "")
+                    generated_code = extract_code_block(generated, "python")[0]
                     err, evaluation_results = evaluate_sample_humaneval(
                         sample["prompt"],
                         generated_code,
@@ -119,6 +120,22 @@ async def main(
         f"Samples where all tests passed: {n_all_tests_passed}/{len(eval_results)}"
     )
     console.print(f"Total tests passed: {n_tests_passed}/{total_n_tests}")
+
+    test_results_dicts = []
+    for res in eval_results:
+        test_results_dicts.append(
+            {
+                "prompt": res.prompt,
+                "generated": res.generated,
+                "test": res.test,
+                "entry_point": res.entry_point,
+                "err": res.err,
+                "evaluation_results": res.evaluation_results,
+            }
+        )
+
+    test_results_pd = pd.DataFrame(test_results_dicts)
+    test_results_pd.to_csv("test_results.csv")
 
 
 Fire(main)
