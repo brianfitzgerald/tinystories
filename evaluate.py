@@ -1,23 +1,21 @@
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, cast
 
 from datasets import Dataset, load_dataset
 from dotenv import dotenv_values
 from fire import Fire
-from rich import print as rprint
 from rich.console import Console
 from rich.progress import Progress
 
 from evaluation.code_execution import evaluate_sample_humaneval, print_code_snippet
 from synthetic_data.generation import (
     MODEL_WRAPPER_CLASSES,
-    GeminiWrapper,
     GenerationSource,
     GenerationWrapper,
 )
-from synthetic_data.tasks import ALL_TASKS, BaseTask, DollyEntityExtraction, HumanEval
+from synthetic_data.tasks import ALL_TASKS
 from synthetic_data.utils import Conversation, ldictl
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +25,7 @@ dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # typ
 async def sample_worker(
     model_wrapper: GenerationWrapper, prompt: List[Conversation], sample: Dict
 ):
-    out = await model_wrapper.generate([prompt]) # type: ignore
+    out = await model_wrapper.generate([prompt])  # type: ignore
     return out, sample
 
 
@@ -57,8 +55,8 @@ async def main(
     task_name: str = "humaneval",
     generation_source: GenerationSource = GenerationSource.OPENAI,
 ):
-    task = ALL_TASKS[task_name]
     console = Console()
+    task = ALL_TASKS[task_name](console)
 
     dataset = cast(Dataset, load_dataset(task.seed_data_location))["test"]
 
@@ -75,11 +73,10 @@ async def main(
             prompts_batch = [
                 task.format_inference_conversation(sample) for sample in samples_batch
             ]
-            for model_config in MODEL_CONFIGS:
-                for prompt, sample in zip(prompts_batch, samples_batch):
-                    all_futures.append(
-                        asyncio.create_task(sample_worker(model_config, prompt, sample))
-                    )
+            for prompt, sample in zip(prompts_batch, samples_batch):
+                all_futures.append(
+                    asyncio.create_task(sample_worker(model_wrapper, prompt, sample))
+                )
 
             results = await asyncio.gather(*all_futures)
             for result, sample in results:
