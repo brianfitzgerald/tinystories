@@ -29,7 +29,9 @@ class WrapperConfig:
     max_seq_length: int = 1512
     prompt_length: int = 1024
     max_samples: Optional[int] = None
-    batch_size: int = 2
+    train_batch_size: int = 4
+    eval_batch_size: int = 2
+    gradient_accumulation_steps: int = 1
     using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
 
@@ -81,7 +83,7 @@ class TrainerWrapper:
         #     self.config.using_filtered_logprobs,
         # )
         self.data_module = CodeContestsDataModule(
-            self.config.batch_size, self.tokenizer, self.config.max_seq_length
+            self.config.train_batch_size, self.tokenizer, self.config.max_seq_length
         )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
@@ -107,11 +109,11 @@ class TrainerWrapper:
         args = DPOConfig(
             output_dir="../outputs",
             num_train_epochs=1,
-            per_device_train_batch_size=12,
-            per_device_eval_batch_size=4,
-            gradient_accumulation_steps=1,
-            gradient_checkpointing=True,
-            optim="adamw_torch_fused",
+            per_device_train_batch_size=self.config.train_batch_size,
+            per_device_eval_batch_size=self.config.eval_batch_size,
+            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
+            gradient_checkpointing=False,
+            optim="adamw_bnb_8bit",
             learning_rate=5e-5,
             max_grad_norm=0.3,
             warmup_ratio=0.1,
@@ -122,7 +124,7 @@ class TrainerWrapper:
             evaluation_strategy="steps",
             eval_steps=700,
             bf16=True,
-            tf32=True,
+            tf32=False,
             push_to_hub=False,
             report_to="wandb",
             # debugger will fail without this

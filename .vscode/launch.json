@@ -33,7 +33,7 @@
             "program": "run_inference.py",
             "console": "integratedTerminal",
             "args": [
-                "--generate_logprobs"
+                // "--generate_logprobs"
             ],
         },
     ]
