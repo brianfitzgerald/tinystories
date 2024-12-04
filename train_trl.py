@@ -1,6 +1,6 @@
 import torch
 from synthetic_data.utils import dictl
-from dataset.squad import UltraFeedbackDataModule
+from dataset.squad import UltraFeedbackDataModule, CodeContestsDataModule
 from transformers import AutoTokenizer, PreTrainedTokenizer
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft.tuners.lora.config import LoraConfig
@@ -33,11 +33,13 @@ class WrapperConfig:
     using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
 
+
 LLAMA_3B_CONFIG = WrapperConfig(
     model_id=LLAMA_3_2_3B,
     max_samples=10000,
     using_filtered_logprobs=True,
 )
+
 
 class TrainerWrapper:
 
@@ -70,13 +72,16 @@ class TrainerWrapper:
         self.tokenizer.truncation_side = "left"
 
     def init_data_module(self, use_cache: bool = True):
-        self.data_module = UltraFeedbackDataModule(
-            self.config.batch_size,
-            self.tokenizer,
-            self.config.max_seq_length,
-            self.config.max_samples,
-            use_cache,
-            self.config.using_filtered_logprobs,
+        # self.data_module = UltraFeedbackDataModule(
+        #     self.config.batch_size,
+        #     self.tokenizer,
+        #     self.config.max_seq_length,
+        #     self.config.max_samples,
+        #     use_cache,
+        #     self.config.using_filtered_logprobs,
+        # )
+        self.data_module = CodeContestsDataModule(
+            self.config.batch_size, self.tokenizer, self.config.max_seq_length
         )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
@@ -173,7 +178,6 @@ class TrainerWrapper:
                         else:
                             out_sample[k] = v
                     outputs.append(out_sample)
-                    batch_iter.set_postfix(out_sample)
         return outputs
 
     def get_sample_wise_metrics(self, batch: dict):

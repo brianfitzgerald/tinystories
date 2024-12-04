@@ -12,7 +12,7 @@ from datasets.arrow_dataset import Dataset
 import os
 
 from transformers.tokenization_utils import PreTrainedTokenizer
-from synthetic_data.utils import ShareGPTConversation, ldictl
+from synthetic_data.utils import ShareGPTConversation, dictl, ldictl
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from tqdm import tqdm
@@ -30,6 +30,9 @@ def format_squad_extractive(sample: dict) -> Tuple[str, str]:
     labels_out = json.dumps(schema)
 
     return input_out, labels_out
+
+
+DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
 
 
 class SquadExtractiveQADataModule(SmDataset):
@@ -193,10 +196,18 @@ class CodeContestsDataModule(SmDataset):
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
-        self.cache_dir = "dataset_caches/dolly_entity_extraction"
+        self.cache_dir = "dataset_caches/codecontests-dpo"
         self.dataset_name = "roborovski/codecontests-dpo"
         self.cpu_count = 1
         self.max_token_length = max_token_length
+
+    def process_samples_batch(self, examples: dict):
+        # No need to tokenize when using DPOTrainer
+
+        prompts = [f"{example['name']}\n{example['description']}" for example in dictl(examples)]
+
+        batch_out = {"chosen": examples["chosen"], "rejected": examples["rejected"], "prompt": prompts}
+        return batch_out
 
 
 class UltraFeedbackDataModule(SmDataset):
@@ -230,7 +241,7 @@ class UltraFeedbackDataModule(SmDataset):
             )
             self.filtered_logprobs_dataset = (
                 self.filtered_logprobs_dataset.train_test_split(test_size=0.1) # type: ignore
-            )
+            )  # type: ignore
             self.train_dataset = self.filtered_logprobs_dataset["train"]
             self.val_dataset = self.filtered_logprobs_dataset["test"]
         else:
@@ -273,13 +284,11 @@ class UltraFeedbackDataModule(SmDataset):
             self.train_dataset.set_format(type="torch", columns=columns)
             self.val_dataset.set_format(type="torch", columns=columns)
 
-    COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
-
     def process_samples_batch(self, examples: dict):
-        out_dict = {k: [] for k in self.COLS_TO_TOKENIZE}
+        out_dict = {k: [] for k in DPO_COLS_TO_TOKENIZE}
         for i in range(len(examples["prompt"])):
             example = {k: v[i] for k, v in examples.items()}
             triplets = create_triplets(example, self.tokenizer)
-            for response_role in self.COLS_TO_TOKENIZE:
+            for response_role in DPO_COLS_TO_TOKENIZE:
                 out_dict[response_role].append(triplets[response_role])
         return out_dict
