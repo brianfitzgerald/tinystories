@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import gradio as gr
-from train_trl import LLAMA_3B_CONFIG, TrainerWrapper
+from train_trl import LLAMA_CONFIG, TrainerWrapper
 from loguru import logger
 
 
@@ -127,7 +127,7 @@ def main(
 ):
     app = FastAPI()
 
-    wrapper = TrainerWrapper(LLAMA_3B_CONFIG)
+    wrapper = TrainerWrapper(LLAMA_CONFIG)
     logger.info("Initializing model")
     wrapper.init_model()
 

@@ -15,6 +15,7 @@ from peft.utils.constants import DUMMY_TARGET_MODULES
 import pandas as pd
 from typing import Optional, Literal
 import os
+from datasets import load_dataset
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
@@ -38,10 +39,11 @@ class WrapperConfig:
     using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
     data_module_choice: DataModuleChoice = "code_contests"
+    wandb_project_name: str = "codecontests-llama-3b"
 
 
-LLAMA_3B_CONFIG = WrapperConfig(
-    model_id=LLAMA_3_2_3B,
+LLAMA_CONFIG = WrapperConfig(
+    model_id=LLAMA_3_2_1B,
     max_samples=10000,
     using_filtered_logprobs=True,
 )
@@ -112,8 +114,11 @@ class TrainerWrapper:
             logger.info("LoRA already loaded")
             peft_config.target_modules = DUMMY_TARGET_MODULES
 
+        random_run_name = f"run-{int(torch.rand(1) * 1000000)}"
+    
+        os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
+
         args = DPOConfig(
-            output_dir="../outputs",
             num_train_epochs=1,
             per_device_train_batch_size=self.config.train_batch_size,
             per_device_eval_batch_size=self.config.eval_batch_size,
@@ -142,13 +147,16 @@ class TrainerWrapper:
             dataloader_pin_memory=True,
             beta=0.1,
             loss_type="sigmoid",
+            run_name=random_run_name,
+            output_dir="../outputs",
         )
 
         self.ref_logpbrobs_cache_location = (
-            f"{self.data_module.cache_dir}/ref_logprobs.parquet"
+            f"{self.data_module.cache_dir}/dpo_computed_dataset.parquet"
         )
 
-        logger.info("Initializing DPOTrainer")
+        logger.info(f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}")
+
         self.trainer = DPOTrainer(
             self.model,
             ref_model=None,  # set to none since we use peft
@@ -161,9 +169,16 @@ class TrainerWrapper:
 
         if self.trainer.precompute_ref_log_probs:
             if os.path.exists(self.ref_logpbrobs_cache_location):
-                pass
-            # force precomputing of reference logprobs
-            self.trainer.get_train_dataloader()
+                logger.info("Loading cached logprobs...")
+                self.trainer.train_dataset = load_dataset("parquet", data_files={"train": self.ref_logpbrobs_cache_location})["train"] # type: ignore
+                self.trainer._precomputed_train_ref_log_probs = True
+            else:
+                # force precomputing of reference logprobs
+                logger.info("Precomputing reference logprobs...")
+                self.trainer.get_train_dataloader()
+                logger.info("Saving reference logprobs...")
+                self.trainer.train_dataset.to_parquet(self.ref_logpbrobs_cache_location)
+
 
     def compute_loss_metrics(self, batch_size: int = 1):
         """
@@ -247,7 +262,7 @@ class TrainerWrapper:
 
 
 def main(generate_logprobs: bool = False):
-    wrapper = TrainerWrapper(LLAMA_3B_CONFIG)
+    wrapper = TrainerWrapper(LLAMA_CONFIG)
     wrapper.init_model()
     wrapper.init_data_module()
     wrapper.init_trainer()

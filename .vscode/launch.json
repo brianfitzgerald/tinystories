@@ -22,9 +22,7 @@
             "request": "launch",
             "program": "train_trl.py",
             "console": "integratedTerminal",
-            "args": [
-                "--generate_logprobs"
-            ],
+            "justMyCode": false,
         },
         {
             "name": "Inference - TRL",
@@ -32,9 +30,6 @@
             "request": "launch",
             "program": "run_inference.py",
             "console": "integratedTerminal",
-            "args": [
-                // "--generate_logprobs"
-            ],
         },
     ]
 }
