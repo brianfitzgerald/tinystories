@@ -13,13 +13,16 @@ from tqdm import tqdm
 from trl.trainer.dpo_trainer import PreferenceCollator
 from peft.utils.constants import DUMMY_TARGET_MODULES
 import pandas as pd
-from typing import Optional
+from typing import Optional, Literal
+import os
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
 LLAMA_3_2_3B = "meta-llama/Llama-3.2-3B-Instruct"
 LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
+
+DataModuleChoice = Literal["ultra_feedback", "code_contests"]
 
 
 @dataclass
@@ -34,6 +37,7 @@ class WrapperConfig:
     gradient_accumulation_steps: int = 1
     using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
+    data_module_choice: DataModuleChoice = "code_contests"
 
 
 LLAMA_3B_CONFIG = WrapperConfig(
@@ -73,18 +77,20 @@ class TrainerWrapper:
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
 
-    def init_data_module(self, use_cache: bool = True):
-        # self.data_module = UltraFeedbackDataModule(
-        #     self.config.batch_size,
-        #     self.tokenizer,
-        #     self.config.max_seq_length,
-        #     self.config.max_samples,
-        #     use_cache,
-        #     self.config.using_filtered_logprobs,
-        # )
-        self.data_module = CodeContestsDataModule(
-            self.config.train_batch_size, self.tokenizer, self.config.max_seq_length
-        )
+    def init_data_module(self):
+        if self.config.data_module_choice == "ultra_feedback":
+            self.data_module = UltraFeedbackDataModule(
+                self.config.train_batch_size,
+                self.tokenizer,
+                self.config.max_seq_length,
+                self.config.max_samples,
+                self.config.single_process_mode,
+                self.config.using_filtered_logprobs,
+            )
+        else:
+            self.data_module = CodeContestsDataModule(
+                self.config.train_batch_size, self.tokenizer, self.config.max_seq_length
+            )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
         self.data_module.setup("fit")
@@ -138,6 +144,10 @@ class TrainerWrapper:
             loss_type="sigmoid",
         )
 
+        self.ref_logpbrobs_cache_location = (
+            f"{self.data_module.cache_dir}/ref_logprobs.parquet"
+        )
+
         logger.info("Initializing DPOTrainer")
         self.trainer = DPOTrainer(
             self.model,
@@ -148,6 +158,12 @@ class TrainerWrapper:
             eval_dataset=self.data_module.val_dataset,
             tokenizer=self.tokenizer,  # type: ignore
         )
+
+        if self.trainer.precompute_ref_log_probs:
+            if os.path.exists(self.ref_logpbrobs_cache_location):
+                pass
+            # force precomputing of reference logprobs
+            self.trainer.get_train_dataloader()
 
     def compute_loss_metrics(self, batch_size: int = 1):
         """
