@@ -100,7 +100,7 @@ class TrainerWrapper:
     def init_trainer(self):
 
         peft_config = LoraConfig(
-            lora_alpha=128,
+            lora_alpha=256,
             lora_dropout=0.05,
             r=256,
             bias="none",
@@ -130,10 +130,10 @@ class TrainerWrapper:
             warmup_ratio=0.1,
             lr_scheduler_type="cosine",
             logging_steps=25,
-            save_steps=500,
+            save_steps=250,
             save_total_limit=2,
             evaluation_strategy="steps",
-            eval_steps=700,
+            eval_steps=100,
             bf16=True,
             tf32=False,
             push_to_hub=False,
@@ -170,6 +170,7 @@ class TrainerWrapper:
         if self.trainer.precompute_ref_log_probs:
             if os.path.exists(self.ref_logpbrobs_cache_location):
                 logger.info("Loading cached logprobs...")
+                # TODO add support for eval dataset
                 self.trainer.train_dataset = load_dataset("parquet", data_files={"train": self.ref_logpbrobs_cache_location})["train"] # type: ignore
                 self.trainer._precomputed_train_ref_log_probs = True
             else:

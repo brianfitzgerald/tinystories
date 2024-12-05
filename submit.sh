@@ -7,6 +7,6 @@
 #SBATCH --gpus=1
 #SBATCH --account=engineering
 #SBATCH --partition=p5
-#SBATCH --priority=normal
+#SBATCH --qos=idle
 
 python train_trl.py
