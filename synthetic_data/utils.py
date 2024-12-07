@@ -1,7 +1,7 @@
 import asyncio
 from enum import Enum
 import re
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Sequence, Union, Any
 import json
 from loguru import logger
 
@@ -10,7 +10,7 @@ from tabulate import tabulate
 from pydantic.dataclasses import dataclass
 
 
-Conversation = List[ChatCompletionMessageParam]
+Conversation = Sequence[ChatCompletionMessageParam]
 ShareGPTConversation = List[Dict[str, str]]
 
 JSONSchemaKey = Union[str, int, float, bool, List[Any], Dict[str, Any], None]
@@ -236,7 +236,7 @@ def ldictl(dict_of_lists: List[dict]):
     return {key: [d[key] for d in dict_of_lists] for key in dict_of_lists[0]} if dict_of_lists else {}
 
 
-def dictl(dict_of_lists):
+def dictl(dict_of_lists: Dict[str,  List]) -> Sequence[dict]:
     """
     Dict of lists to list of dicts.
     """

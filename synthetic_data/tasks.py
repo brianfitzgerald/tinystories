@@ -1,8 +1,17 @@
-from abc import ABC
-import sys
+import json
 import random
+import sys
 import traceback
-from typing import Dict, List, Literal
+from abc import ABC
+from dataclasses import dataclass
+from typing import Dict, List, Literal, Optional
+
+from datasets import Dataset
+from loguru import logger
+from pydantic import ValidationError
+from rich.console import Console
+from rich.markdown import Markdown
+
 from evaluation.code_execution import (
     evaluate_python_code_exec,
     evaluate_sample_humaneval,
@@ -11,14 +20,13 @@ from evaluation.code_execution import (
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
-    ENTITY_EXTRACTION_TUNING_INSTRUCTION,
     format_codecontests_generation_prompt,
     format_dalle_prompt_template,
-    format_humaneval_generation_prompt,
     format_entity_extraction_conversation_template,
+    format_goody_prompt_template,
+    format_humaneval_generation_prompt,
     get_tool_usage_prompt,
     get_toolformer_dpo_negative_completion_prompt,
-    format_goody_prompt_template,
 )
 from synthetic_data.tools import (
     DROPOUT_TYPES_JSON,
@@ -26,38 +34,89 @@ from synthetic_data.tools import (
     get_tool_description_json,
     get_tool_descriptions,
 )
-import json
-from pydantic import ValidationError
-from datasets import Dataset
-from loguru import logger
-from rich.console import Console
-from rich.markdown import Markdown
-from dataclasses import dataclass
-
 from synthetic_data.utils import (
     Conversation,
+    ExtractiveQARow,
     SeedDataFormat,
-    SyntheticToolCallRow,
     SyntheticToolCallDPORow,
+    SyntheticToolCallRow,
     ToolFormerDPORow,
     ToolFormerRow,
-    ExtractiveQARow,
     chunk_list,
+    clean_message,
     dictl,
     extract_code_block,
     flatten_list,
-    is_valid_python,
-    clean_message,
     get_matches,
+    is_valid_python,
 )
 
-EvalTaskType = Literal["code-eval-ast"]
+
+@dataclass
+class EvalResult:
+    prompt: str
+    generated: str
+    test: str
+    entry_point: str
+    err: Optional[str]
+    evaluation_results: List[bool]
+
+
+def _print_test_results(err: Optional[str], results: List[bool], console: Console):
+    result_str = "Results: "
+    if err:
+        result_str += f"[red]Execution error: {err}[/red]"
+    else:
+        passed = sum(results)
+        total = len(results)
+        result_str += f"{passed}/{total} tests passed"
+    console.print(result_str)
+
+
+EvalTaskType = Literal["code-eval-ast", "code-eval-exec"]
+CodeTaskFormat = Literal["humaneval", "mbpp"]
 
 
 @dataclass
 class EvalTask(ABC):
     dataset_uri: str
+    code_task_format: Optional[CodeTaskFormat]
     task_type: EvalTaskType
+
+
+def evaluate_code_results(
+    console: Console, results: list[tuple[str, dict]]
+) -> List[EvalResult]:
+    results_batch: List[EvalResult] = []
+    for result, sample in results:
+        for generated in result:
+            console.print(f"Function: {sample['entry_point']}")
+            console.print(f"Canonical solution:")
+            print_code_snippet(sample["canonical_solution"], console)
+            generated_code = extract_code_block(generated, "python")[0]
+            err, evaluation_results = evaluate_sample_humaneval(
+                sample["prompt"],
+                generated_code,
+                sample["test"],
+                sample["entry_point"],
+            )
+            console.print(f"Generated solution:")
+            print_code_snippet(generated_code, console)
+            console.print(f"Test code:")
+            print_code_snippet(sample["test"], console)
+            _print_test_results(err, evaluation_results, console)
+            console.print("=" * console.size.width)
+            results_batch.append(
+                EvalResult(
+                    sample["prompt"],
+                    generated_code,
+                    sample["test"],
+                    sample["entry_point"],
+                    err,
+                    evaluation_results,
+                )
+            )
+    return results_batch
 
 
 class BaseTask(ABC):
@@ -70,7 +129,7 @@ class BaseTask(ABC):
 
     dataset_columns: List[str] = []
 
-    eval_tasks: List[EvalTask] = [EvalTask("openai/openai_humaneval", "code-eval-ast")]
+    eval_tasks: List[EvalTask] = []
 
     def __init__(self, console: Console) -> None:
         super().__init__()
@@ -91,7 +150,9 @@ class BaseTask(ABC):
         """
         raise NotImplementedError
 
-    def format_inference_conversation(self, sample: Dict) -> List[Conversation]:
+    def format_inference_conversation(
+        self, sample: Dict, eval_task: Optional[EvalTask] = None
+    ) -> Conversation:
         """
         Prompt template to use for generating initial seed data.
         """
@@ -471,10 +532,6 @@ class HumanEval(DPOTask):
 
     dataset_columns = ["chosen", "rejected", "id", "prompt"]
 
-    def format_inference_conversation(self, sample: Dict) -> Conversation:
-        fn_name, tests = sample["entry_point"], sample["test"]
-        return format_humaneval_generation_prompt(fn_name, tests)
-
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         fn_name, tests = batch["entry_point"], batch["test"]
         self.input_batch = dictl(batch)
@@ -528,7 +585,7 @@ class HumanEval(DPOTask):
 
 
 @dataclass
-class CodeforcesProblem:
+class CodeContestsProblem:
     source: int
     difficulty: int
     name: str
@@ -548,20 +605,28 @@ class CodeContests(HumanEval):
 
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
+    eval_tasks = [
+        EvalTask("openai/openai_humaneval", "humaneval", "code-eval-exec"),
+        EvalTask("google-research-datasets/mbpp", "mbpp", "code-eval-ast"),
+    ]
+
     def __init__(self, console) -> None:
         super().__init__(console)
         self.n_completions_per_sample = 3
         self.print_definitions = False
 
-    def format_inference_conversation(self, sample: Dict) -> Conversation:
-        sample_dc = CodeforcesProblem(**sample)
+    def format_inference_conversation(
+        self, sample: Dict, eval_task: Optional[EvalTask] = None
+    ) -> Conversation:
+        sample_dc = CodeContestsProblem(**sample)
+        # TODO select correct format from eval task
         return format_codecontests_generation_prompt(
             sample_dc.description,
         )
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         input_batch = dictl(batch)
-        self.problems = [CodeforcesProblem(**row) for row in input_batch]
+        self.problems = [CodeContestsProblem(**row) for row in input_batch]
         self.input_conversations = []
 
         for i, problem in enumerate(self.problems):
