@@ -12,6 +12,7 @@ from transformers.generation.configuration_utils import GenerationConfig
 
 from torch.utils.data import DataLoader
 from transformers.trainer_utils import EvalLoopOutput
+from transformers import Trainer
 from trl.trainer.utils import pad_to_length
 from tabulate import tabulate
 
@@ -98,6 +99,7 @@ class CustomDPOTrainer(DPOTrainer):
 
         Works both with or without labels.
         """
+        print('custom eval loop')
 
         # Sample and save to game log if requested (for one batch to save time)
         if self.generate_during_eval:
@@ -138,7 +140,8 @@ class CustomDPOTrainer(DPOTrainer):
             self.state.log_history.pop()
 
         # Base evaluation
-        initial_output = super().evaluation_loop(
+        initial_output = Trainer.evaluation_loop(
+            self,
             dataloader,
             description,
             prediction_loss_only,
