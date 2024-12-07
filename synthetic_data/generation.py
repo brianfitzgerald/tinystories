@@ -207,6 +207,7 @@ class GenerationSource(str, Enum):
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
     MOCK = "mock"
+    LOCAL = "local"
 
 
 MODEL_WRAPPER_CLASSES = {

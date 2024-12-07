@@ -1,13 +1,11 @@
 import torch
-from transformers import (
-    GenerationConfig,
-    TextIteratorStreamer,
-)
+from transformers.generation.configuration_utils import GenerationConfig
 from threading import Thread
 
 import fire
 from typing import Optional, List
 
+from transformers.generation.streamers import TextIteratorStreamer
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel

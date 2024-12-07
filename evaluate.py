@@ -54,7 +54,7 @@ class EvalResult:
 async def main(
     batch_size: int = 8,
     task_name: str = "humaneval",
-    generation_source: GenerationSource = GenerationSource.OPENAI,
+    generation_source: str = GenerationSource.OPENAI.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)
