@@ -193,6 +193,7 @@ class CodeContestsDataModule(SmDataset):
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
+        max_val_size: Optional[int] = None
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
@@ -200,6 +201,9 @@ class CodeContestsDataModule(SmDataset):
         self.dataset_name = "roborovski/codecontests-dpo"
         self.cpu_count = 1
         self.max_token_length = max_token_length
+        if max_val_size:
+            logger.info(f"Max val size set to {max_val_size}")
+            self.val_dataset = self.val_dataset[:max_val_size]
 
     def process_samples_batch(self, examples: dict):
         # No need to tokenize when using DPOTrainer

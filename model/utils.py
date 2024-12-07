@@ -117,7 +117,12 @@ class SmDataset(pl.LightningDataModule):
             num_proc=self.num_workers,
         )
 
-        if all([x in self.train_dataset.column_names for x in ["input_ids", "attention_mask", "labels"]]):
+        if all(
+            [
+                x in self.train_dataset.column_names
+                for x in ["input_ids", "attention_mask", "labels"]
+            ]
+        ):
             columns = [
                 "input_ids",
                 "attention_mask",
@@ -128,7 +133,9 @@ class SmDataset(pl.LightningDataModule):
             self.train_dataset.set_format(type="torch", columns=columns)
             self.val_dataset.set_format(type="torch", columns=columns)
         else:
-            logger.warning(f"Columns not found in dataset, skipping setting format: {self.train_dataset.column_names}")
+            logger.warning(
+                f"Computed columns not found in dataset: {self.train_dataset.column_names} assuming using "
+            )
 
     def process_samples_batch(self, examples: dict):
         return self._tokenize(examples[self.input_column], examples[self.target_column])

@@ -14,7 +14,6 @@
             "request": "launch",
             "program": "generate.py",
             "console": "integratedTerminal",
-            // "args": ["--restart"],
         },
         {
             "name": "Train - TRL",
@@ -23,6 +22,7 @@
             "program": "train_trl.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            // "args": ["--wandb"]
         },
         {
             "name": "Inference - TRL",

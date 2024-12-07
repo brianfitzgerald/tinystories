@@ -9,4 +9,4 @@
 #SBATCH --partition=p5
 #SBATCH --qos=idle
 
-python train_trl.py
+python train_trl.py --wandb
