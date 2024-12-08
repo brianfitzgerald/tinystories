@@ -3,7 +3,7 @@ import traceback
 from typing import Any, Callable, List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
-from typing import Optional, Callable
+from typing import Optional, Callable, Literal
 import ast
 import contextlib
 import io
@@ -11,8 +11,11 @@ import signal
 from enum import Enum
 from contextlib import redirect_stdout, redirect_stderr, contextmanager
 from wrapt_timeout_decorator import timeout
+from dataclasses import dataclass
+from abc import ABC
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
+from synthetic_data.utils import extract_code_block
 
 ALLOWED_FNS = {
     range,
@@ -146,9 +149,13 @@ class AssertToBoolTransformer(ast.NodeTransformer):
 class RemoveMetadataTransformer(ast.NodeTransformer):
     def visit_Assign(self, node):
         # Check if the target of the assignment is METADATA
-        if any(isinstance(target, ast.Name) and target.id == "METADATA" for target in node.targets):
+        if any(
+            isinstance(target, ast.Name) and target.id == "METADATA"
+            for target in node.targets
+        ):
             return None  # Remove this node
         return node  # Keep other nodes
+
 
 def assertions_to_tests(test_code: str, entrypoint: str):
     test_code = test_code.replace("candidate(", entrypoint + "(")
@@ -232,7 +239,6 @@ class redirect_stdin(contextlib._RedirectStream):  # type: ignore
     _stream = "stdin"
 
 
-
 @timeout(2)
 def evaluate_python_code_exec(
     code_to_run: str, test_inputs: str, timeout_sec: float = 10
@@ -291,3 +297,117 @@ def evaluate_sample_codecontests(
         return None, fn_out  # type: ignore
     except Exception as e:
         return str(e), []
+
+
+def _print_test_results(err: Optional[str], results: List[bool], console: Console):
+    result_str = "Results: "
+    if err:
+        result_str += f"[red]Execution error: {err}[/red]"
+    else:
+        passed = sum(results)
+        total = len(results)
+        result_str += f"{passed}/{total} tests passed"
+    console.print(result_str)
+
+
+# Whether to evaluate via AST interpereter or exec() function
+CodeEvalType = Literal["ast", "exec"]
+# Format to use for prompting and dataset style
+CodeTaskFormat = Literal["humaneval", "mbpp"]
+
+
+@dataclass
+class EvalTask(ABC):
+    name: str
+    dataset_uri: str
+    code_task_format: Optional[CodeTaskFormat]
+    code_eval_type: Optional[CodeEvalType]
+    eval_split: str = "test"
+
+
+@dataclass
+class EvalResult:
+    prompt: str
+    generated_code: str
+    test: str
+    entry_point: str
+    err: Optional[str]
+    tests_pass: List[bool]
+
+
+def evaluate_codecontests(
+    console: Console, results: list[tuple[str, dict]], eval_task: EvalTask
+) -> List[EvalResult]:
+    results_batch: List[EvalResult] = []
+    for result, sample in results:
+        for generated in result:
+            console.print(f"Function name: {sample['entry_point']}")
+            console.print(f"Canonical solution:")
+            print_code_snippet(sample["canonical_solution"], console)
+            generated_code = extract_code_block(generated, "python")[0]
+            exec_err, evaluation_results = evaluate_sample_humaneval(
+                sample["prompt"],
+                generated_code,
+                sample["test"],
+                sample["entry_point"],
+            )
+            console.print(f"Generated solution:")
+            print_code_snippet(generated_code, console)
+            console.print(f"Test code:")
+            print_code_snippet(sample["test"], console)
+            _print_test_results(exec_err, evaluation_results, console)
+            console.print("=" * console.size.width)
+            results_batch.append(
+                EvalResult(
+                    sample["prompt"],
+                    generated_code,
+                    sample["test"],
+                    sample["entry_point"],
+                    exec_err,
+                    evaluation_results,
+                )
+            )
+    return results_batch
+
+
+def eval_results_to_markdown(evalresults: List[EvalResult]) -> str:
+    lines = []
+    for i, er in enumerate(evalresults, start=1):
+        lines.append(f"## Result {i}")
+        lines.append("")
+        lines.append(f"**Prompt:** {er.prompt}")
+        lines.append("")
+
+        lines.append("**Generated Code:**")
+        lines.append("```python")
+        lines.append(er.generated_code.strip())
+        lines.append("```")
+        lines.append("")
+
+        lines.append("**Test Code:**")
+        lines.append("```python")
+        lines.append(er.test.strip())
+        lines.append("```")
+        lines.append("")
+
+        lines.append(f"**Entry Point:** `{er.entry_point}`")
+        lines.append("")
+
+        if er.err:
+            lines.append("**Error:**")
+            lines.append("```")
+            lines.append(er.err.strip())
+            lines.append("```")
+        else:
+            lines.append("**Error:** No error")
+
+        lines.append("")
+        lines.append("**Tests Passed:**")
+        for idx, passed in enumerate(er.tests_pass, start=1):
+            status = "✓" if passed else "✗"
+            lines.append(f"- Test {idx}: {status}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    return "\n".join(lines)

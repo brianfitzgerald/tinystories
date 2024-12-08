@@ -9,12 +9,13 @@ from fire import Fire
 from rich.console import Console
 from rich.progress import Progress
 
+from evaluation.code_execution import EvalResult, evaluate_codecontests
 from synthetic_data.generation import (
     MODEL_WRAPPER_CLASSES,
     GenerationSource,
     GenerationWrapper,
 )
-from synthetic_data.tasks import ALL_TASKS, EvalResult, evaluate_codecontests
+from synthetic_data.tasks import ALL_TASKS
 from synthetic_data.utils import Conversation, dictl
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -66,11 +67,11 @@ async def main(
                 progress.advance(prog_task, 1)
 
     n_all_tests_passed = sum(
-        sum(res.evaluation_results) == len(res.evaluation_results)
+        sum(res.tests_pass) == len(res.tests_pass)
         for res in eval_results
     )
-    n_tests_passed = sum(sum(res.evaluation_results) for res in eval_results)
-    total_n_tests = sum(len(res.evaluation_results) for res in eval_results)
+    n_tests_passed = sum(sum(res.tests_pass) for res in eval_results)
+    total_n_tests = sum(len(res.tests_pass) for res in eval_results)
     console.print(
         f"Samples where all tests passed: {n_all_tests_passed}/{len(eval_results)}"
     )
@@ -81,11 +82,11 @@ async def main(
         test_results_dicts.append(
             {
                 "prompt": res.prompt,
-                "generated": res.generated,
+                "generated": res.generated_code,
                 "test": res.test,
                 "entry_point": res.entry_point,
                 "err": res.err,
-                "evaluation_results": res.evaluation_results,
+                "evaluation_results": res.tests_pass,
             }
         )
 

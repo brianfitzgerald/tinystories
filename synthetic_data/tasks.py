@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from evaluation.code_execution import (
+    EvalTask,
     evaluate_python_code_exec,
     evaluate_sample_humaneval,
     print_code_snippet,
@@ -50,77 +51,6 @@ from synthetic_data.utils import (
     get_matches,
     is_valid_python,
 )
-
-
-@dataclass
-class EvalResult:
-    prompt: str
-    generated: str
-    test: str
-    entry_point: str
-    err: Optional[str]
-    evaluation_results: List[bool]
-
-
-def _print_test_results(err: Optional[str], results: List[bool], console: Console):
-    result_str = "Results: "
-    if err:
-        result_str += f"[red]Execution error: {err}[/red]"
-    else:
-        passed = sum(results)
-        total = len(results)
-        result_str += f"{passed}/{total} tests passed"
-    console.print(result_str)
-
-
-# Whether to evaluate via AST interpereter or exec() function
-CodeEvalType = Literal["ast", "exec"]
-# Format to use for prompting and dataset style
-CodeTaskFormat = Literal["humaneval", "mbpp"]
-
-
-@dataclass
-class EvalTask(ABC):
-    name: str
-    dataset_uri: str
-    code_task_format: Optional[CodeTaskFormat]
-    code_eval_type: Optional[CodeEvalType]
-    eval_split: str = "test"
-
-
-def evaluate_codecontests(
-    console: Console, results: list[tuple[str, dict]], eval_task: EvalTask
-) -> List[EvalResult]:
-    results_batch: List[EvalResult] = []
-    for result, sample in results:
-        for generated in result:
-            console.print(f"Function name: {sample['entry_point']}")
-            console.print(f"Canonical solution:")
-            print_code_snippet(sample["canonical_solution"], console)
-            generated_code = extract_code_block(generated, "python")[0]
-            err, evaluation_results = evaluate_sample_humaneval(
-                sample["prompt"],
-                generated_code,
-                sample["test"],
-                sample["entry_point"],
-            )
-            console.print(f"Generated solution:")
-            print_code_snippet(generated_code, console)
-            console.print(f"Test code:")
-            print_code_snippet(sample["test"], console)
-            _print_test_results(err, evaluation_results, console)
-            console.print("=" * console.size.width)
-            results_batch.append(
-                EvalResult(
-                    sample["prompt"],
-                    generated_code,
-                    sample["test"],
-                    sample["entry_point"],
-                    err,
-                    evaluation_results,
-                )
-            )
-    return results_batch
 
 
 class BaseTask(ABC):

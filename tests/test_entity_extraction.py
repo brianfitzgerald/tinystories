@@ -2,7 +2,7 @@ import sys
 
 sys.path.append(".")
 
-from synthetic_data.utils import extract_code_block
+from synthetic_data.utils import extract_code_block, extract_json_code_blocks
 
 TEST_OUTPUT = """
 Here's an example of structured data extraction from the given context in JSON form:
@@ -74,5 +74,5 @@ This query requests specific information about Stanley J. Goldberg, including hi
 
 
 def test_extract_json():
-    json_schema = extract_code_block(TEST_OUTPUT)
+    json_schema = extract_json_code_blocks(TEST_OUTPUT)
     assert len(json_schema) == 2
