@@ -29,7 +29,7 @@ async def sample_worker(
 
 
 async def main(
-    batch_size: int = 8,
+    batch_size: int = 4,
     task_name: str = "codecontests",
     gen_source: str = GenerationSource.GEMINI.value,
 ):

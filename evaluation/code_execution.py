@@ -191,7 +191,6 @@ def evaluate_sample_humaneval(
     """
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
     full_code = sample + solution + "\n" + tests + "\ncheck()"
-    print(full_code)
     try:
         fn_out = evaluate_python_code_ast(
             full_code,
