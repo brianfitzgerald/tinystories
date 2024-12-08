@@ -521,6 +521,7 @@ class HumanEval(DPOTask):
             )
         return res
 
+
 class CodeContests(HumanEval):
 
     seed_data_format = SeedDataFormat.HF_DATASET
@@ -563,7 +564,9 @@ class CodeContests(HumanEval):
                 mbpp_problem = MBPPProblem(**sample)
                 problem = _convert_mbpp_to_humaneval(mbpp_problem)
             else:
-                raise ValueError(f"Invalid code task format: {eval_task.code_task_format}")
+                raise ValueError(
+                    f"Invalid code task format: {eval_task.code_task_format}"
+                )
             return format_codecontests_generation_prompt(
                 problem.prompt,
             )

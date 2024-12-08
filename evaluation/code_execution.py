@@ -342,9 +342,9 @@ def evaluate_codecontests(
     for result, sample_dict in results:
         for generated in result:
             if eval_task.code_task_format == "mbpp":
-                sample = _convert_mbpp_to_humaneval(MBPPProblem(*sample_dict))
+                sample = _convert_mbpp_to_humaneval(MBPPProblem(**sample_dict))
             else:
-                sample = HumanEvalProblem(*sample_dict)
+                sample = HumanEvalProblem(**sample_dict)
             console.print(f"Function name: {sample.task_id}")
             console.print(f"Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
@@ -450,10 +450,12 @@ class MBPPProblem:
 
 
 def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
+    test_code = "\n\t".join(sample.test_list)
+    test_code = f"def check():\n\t{test_code}"
     return HumanEvalProblem(
         task_id=sample.task_id,
         prompt=sample.text,
         canonical_solution=sample.code,
-        test=sample.test_setup_code,
+        test=test_code,
         entry_point=sample.code,
     )
