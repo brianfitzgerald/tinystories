@@ -79,9 +79,11 @@ CodeTaskFormat = Literal["humaneval", "mbpp"]
 
 @dataclass
 class EvalTask(ABC):
+    name: str
     dataset_uri: str
     code_task_format: Optional[CodeTaskFormat]
     task_type: EvalTaskType
+    eval_split: str = "test"
 
 
 def evaluate_code_results(
@@ -596,6 +598,15 @@ class CodeContestsProblem:
     cf_points: float
 
 
+@dataclass
+class HumanEvalProblem:
+    task_id: str
+    prompt: str
+    canonical_solution: str
+    test: str
+    entry_point: str
+
+
 class CodeContests(HumanEval):
 
     seed_data_format = SeedDataFormat.HF_DATASET
@@ -606,8 +617,20 @@ class CodeContests(HumanEval):
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
     eval_tasks = [
-        EvalTask("openai/openai_humaneval", "humaneval", "code-eval-exec"),
-        EvalTask("google-research-datasets/mbpp", "mbpp", "code-eval-ast"),
+        EvalTask(
+            "humaneval",
+            "openai/openai_humaneval",
+            "humaneval",
+            "code-eval-exec",
+            "test",
+        ),
+        EvalTask(
+            "humaneval",
+            "google-research-datasets/mbpp",
+            "mbpp",
+            "code-eval-ast",
+            "train",
+        ),
     ]
 
     def __init__(self, console) -> None:
@@ -618,11 +641,16 @@ class CodeContests(HumanEval):
     def format_inference_conversation(
         self, sample: Dict, eval_task: Optional[EvalTask] = None
     ) -> Conversation:
-        sample_dc = CodeContestsProblem(**sample)
-        # TODO select correct format from eval task
-        return format_codecontests_generation_prompt(
-            sample_dc.description,
-        )
+        if eval_task:
+            if eval_task.code_task_format == "humaneval":
+                problem = HumanEvalProblem(**sample)
+                return format_codecontests_generation_prompt(problem.prompt)
+            elif eval_task.code_task_format == "mbpp":
+                sample_dc = CodeContestsProblem(**sample)
+                return format_codecontests_generation_prompt(
+                    sample_dc.description,
+                )
+        return format_codecontests_generation_prompt(sample["description"])
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         input_batch = dictl(batch)

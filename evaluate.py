@@ -1,6 +1,6 @@
 import asyncio
 import os
-from typing import Dict, List, Sequence, cast
+from typing import Dict, List, cast
 
 import pandas as pd
 from datasets import Dataset, load_dataset
@@ -30,13 +30,11 @@ async def sample_worker(
 
 async def main(
     batch_size: int = 8,
-    task_name: str = "humaneval",
+    task_name: str = "codecontests",
     gen_source: str = GenerationSource.OPENAI.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)
-
-    dataset = cast(Dataset, load_dataset(task.seed_data_location))["test"]
 
     console = Console()
     gen_source_enum = GenerationSource(gen_source)
@@ -44,20 +42,28 @@ async def main(
 
     eval_results: List[EvalResult] = []
     with Progress() as progress:
-        prog_task = progress.add_task("Evaluating", total=len(dataset))
-        for batch in dataset.iter(batch_size=batch_size):  # type: ignore
-            all_futures = []
-            samples_batch = dictl(batch)
-            eval_prompts_batch = [
-                task.format_inference_conversation(sample) for sample in samples_batch
+        for eval_task in task.eval_tasks:
+            dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))[
+                eval_task.eval_split
             ]
-            for prompt, sample in zip(eval_prompts_batch, samples_batch):
-                all_futures.append(
-                    asyncio.create_task(sample_worker(model_wrapper, prompt, sample))
-                )
-            results: List[tuple[str, dict]] = await asyncio.gather(*all_futures)
-            eval_results.extend(evaluate_code_results(console, results))
-            progress.advance(prog_task, 1)
+            progress_bar_title = f"Eval task: {eval_task.dataset_uri}"
+            prog_task = progress.add_task(progress_bar_title, total=len(dataset))
+            for batch in dataset.iter(batch_size=batch_size):  # type: ignore
+                all_futures = []
+                samples_batch = dictl(batch)
+                eval_prompts_batch = [
+                    task.format_inference_conversation(sample, eval_task)
+                    for sample in samples_batch
+                ]
+                for prompt, sample in zip(eval_prompts_batch, samples_batch):
+                    all_futures.append(
+                        asyncio.create_task(
+                            sample_worker(model_wrapper, prompt, sample)
+                        )
+                    )
+                results: List[tuple[str, dict]] = await asyncio.gather(*all_futures)
+                eval_results.extend(evaluate_code_results(console, results))
+                progress.advance(prog_task, 1)
 
     n_all_tests_passed = sum(
         sum(res.evaluation_results) == len(res.evaluation_results)
