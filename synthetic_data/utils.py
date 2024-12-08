@@ -4,6 +4,8 @@ import re
 from typing import Dict, List, Optional, Sequence, Union, Any
 import json
 from loguru import logger
+from pathlib import Path
+import shutil
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tabulate import tabulate
@@ -210,13 +212,20 @@ def extract_json_code_blocks(msg: str) -> List[JSONSchema]:
     return res
 
 
+def ensure_directory(directory: str, clear: bool = True):
+    """
+    Create a directory and parents if it doesn't exist, and clear it if it does.
+    """
+    Path(directory).mkdir(exist_ok=True, parents=True)
+    if clear:
+        shutil.rmtree(directory)
+    Path(directory).mkdir(exist_ok=True, parents=True)
 
 
 def extract_code_block(msg: str, language: str = "python") -> List[str]:
-    match_pattern = fr"```(?:{language})?\n(.*?)\n```"
+    match_pattern = rf"```(?:{language})?\n(.*?)\n```"
     blocks = re.findall(match_pattern, msg, re.DOTALL)
     return blocks
-
 
 
 async def gather_with_concurrency_limit(n: int, *coros):
@@ -233,10 +242,14 @@ def ldictl(dict_of_lists: List[dict]):
     """
     List of dicts to dict of lists.
     """
-    return {key: [d[key] for d in dict_of_lists] for key in dict_of_lists[0]} if dict_of_lists else {}
+    return (
+        {key: [d[key] for d in dict_of_lists] for key in dict_of_lists[0]}
+        if dict_of_lists
+        else {}
+    )
 
 
-def dictl(dict_of_lists: Dict[str,  List]) -> Sequence[dict]:
+def dictl(dict_of_lists: Dict[str, List]) -> Sequence[dict]:
     """
     Dict of lists to list of dicts.
     """

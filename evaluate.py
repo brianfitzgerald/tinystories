@@ -9,17 +9,18 @@ from fire import Fire
 from rich.console import Console
 from rich.progress import Progress
 
-from evaluation.code_execution import EvalResult, evaluate_codecontests
+from evaluation.code_execution import (
+    EvalResult,
+    eval_results_to_markdown,
+    evaluate_codecontests,
+)
 from synthetic_data.generation import (
     MODEL_WRAPPER_CLASSES,
     GenerationSource,
     GenerationWrapper,
 )
 from synthetic_data.tasks import ALL_TASKS
-from synthetic_data.utils import Conversation, dictl
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
+from synthetic_data.utils import Conversation, dictl, ensure_directory
 
 
 async def sample_worker(
@@ -37,11 +38,18 @@ async def main(
     console = Console()
     task = ALL_TASKS[task_name](console)
 
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
     console = Console()
     gen_source_enum = GenerationSource(gen_source)
     model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[gen_source_enum](dotenv)
 
+    run_name = f"{task_name}_{gen_source}"
+    out_dir = os.path.join(current_dir, "out", run_name)
+    ensure_directory(out_dir)
+
     eval_results: List[EvalResult] = []
+    md_out_lines = []
     with Progress() as progress:
         for eval_task in task.eval_tasks:
             dataset = cast(Dataset, load_dataset(eval_task.dataset_uri))[
@@ -65,10 +73,12 @@ async def main(
                 results: List[tuple[str, dict]] = await asyncio.gather(*all_futures)
                 eval_results.extend(evaluate_codecontests(console, results, eval_task))
                 progress.advance(prog_task, 1)
+                md_out_lines.extend(eval_results_to_markdown(eval_results))
+                with open(f"{out_dir}/eval_results.md", "w") as f:
+                    f.write("\n".join(md_out_lines))
 
     n_all_tests_passed = sum(
-        sum(res.tests_pass) == len(res.tests_pass)
-        for res in eval_results
+        sum(res.tests_pass) == len(res.tests_pass) for res in eval_results
     )
     n_tests_passed = sum(sum(res.tests_pass) for res in eval_results)
     total_n_tests = sum(len(res.tests_pass) for res in eval_results)
@@ -91,7 +101,7 @@ async def main(
         )
 
     test_results_pd = pd.DataFrame(test_results_dicts)
-    test_results_pd.to_csv("test_results.csv")
+    test_results_pd.to_csv(f"{out_dir}/test_results.csv", index=False)
 
 
 Fire(main)

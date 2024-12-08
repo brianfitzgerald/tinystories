@@ -211,7 +211,7 @@ class Toolformer(DPOTask):
 
 class SyntheticToolCalls(DPOTask):
     seed_data_format = SeedDataFormat.TSV
-    seed_data_location = "seed_data_files/domain_specific_tasks.csv"
+    seed_data_location = "data/domain_specific_tasks.csv"
 
     dataset_org = "roborovski"
 

@@ -1,4 +1,5 @@
 from evaluation.code_execution import EvalResult, eval_results_to_markdown
+from synthetic_data.utils import ensure_directory
 
 GENERATED_SOLUTION = """
 def filter_by_substring(strings: List[str], substring: str) -> List[str]:                                                                                                                         
@@ -22,6 +23,7 @@ def check(candidate):
     assert candidate(['grunt', 'trumpet', 'prune', 'gruesome'], 'run') == ['grunt', 'prune']
 """
 
+
 def test_format_markdown():
     eval_result = EvalResult(
         prompt="Write a function to filter a list of strings by a given substring.",
@@ -29,6 +31,9 @@ def test_format_markdown():
         test=TEST_CODE,
         entry_point="filter_by_substring",
         err="",
-        tests_pass=[True, True]
+        tests_pass=[True, True],
     )
-    eval_results_to_markdown([eval_result, eval_result])
+    out = eval_results_to_markdown([eval_result, eval_result])
+    ensure_directory("out")
+    with open("out/test_format_markdown.md", "w") as f:
+        f.write("\n".join(out))

@@ -370,44 +370,45 @@ def evaluate_codecontests(
     return results_batch
 
 
-def eval_results_to_markdown(evalresults: List[EvalResult]) -> str:
-    lines = []
+def eval_results_to_markdown(evalresults: List[EvalResult]) -> List[str]:
+    """
+    Convert a list of EvalResult objects to a file string.
+    Returns the individual lines of the file.
+    """
+    md_lines = []
     for i, er in enumerate(evalresults, start=1):
-        lines.append(f"## Result {i}")
-        lines.append("")
-        lines.append(f"**Prompt:** {er.prompt}")
-        lines.append("")
-
-        lines.append("**Generated Code:**")
-        lines.append("```python")
-        lines.append(er.generated_code.strip())
-        lines.append("```")
-        lines.append("")
-
-        lines.append("**Test Code:**")
-        lines.append("```python")
-        lines.append(er.test.strip())
-        lines.append("```")
-        lines.append("")
-
-        lines.append(f"**Entry Point:** `{er.entry_point}`")
-        lines.append("")
-
+        md_lines.extend(
+            [
+                f"## Result {i}: {er.entry_point}",
+                "",
+                f"**Prompt:** {er.prompt}",
+                "",
+                "**Generated Code:**",
+                "```python",
+                er.generated_code.strip(),
+                "```",
+                "",
+                "**Test Code:**",
+                "```python",
+                er.test.strip(),
+                "```",
+                "",
+                "**Code Snippet:**",
+                "```python",
+                er.generated_code.strip(),
+                "```",
+                "**Error:**" if er.err else "**Error:** No error",
+            ]
+        )
         if er.err:
-            lines.append("**Error:**")
-            lines.append("```")
-            lines.append(er.err.strip())
-            lines.append("```")
-        else:
-            lines.append("**Error:** No error")
+            md_lines.extend(["```", er.err.strip(), "```"])
+        md_lines.extend(["", "**Tests Passed:**"])
+        md_lines.extend(
+            [
+                f"- Test {idx}: {'✓' if passed else '✗'}"
+                for idx, passed in enumerate(er.tests_pass, start=1)
+            ]
+        )
+        md_lines.extend(["", "---", ""])
 
-        lines.append("")
-        lines.append("**Tests Passed:**")
-        for idx, passed in enumerate(er.tests_pass, start=1):
-            status = "✓" if passed else "✗"
-            lines.append(f"- Test {idx}: {status}")
-        lines.append("")
-        lines.append("---")
-        lines.append("")
-
-    return "\n".join(lines)
+    return md_lines
