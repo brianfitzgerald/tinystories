@@ -73,7 +73,9 @@ def _print_test_results(err: Optional[str], results: List[bool], console: Consol
     console.print(result_str)
 
 
-EvalTaskType = Literal["code-eval-ast", "code-eval-exec"]
+# Whether to evaluate via AST interpereter or exec() function
+CodeEvalType = Literal["ast", "exec"]
+# Format to use for prompting and dataset style
 CodeTaskFormat = Literal["humaneval", "mbpp"]
 
 
@@ -82,17 +84,17 @@ class EvalTask(ABC):
     name: str
     dataset_uri: str
     code_task_format: Optional[CodeTaskFormat]
-    task_type: EvalTaskType
+    code_eval_type: Optional[CodeEvalType]
     eval_split: str = "test"
 
 
-def evaluate_code_results(
-    console: Console, results: list[tuple[str, dict]]
+def evaluate_codecontests(
+    console: Console, results: list[tuple[str, dict]], eval_task: EvalTask
 ) -> List[EvalResult]:
     results_batch: List[EvalResult] = []
     for result, sample in results:
         for generated in result:
-            console.print(f"Function: {sample['entry_point']}")
+            console.print(f"Function name: {sample['entry_point']}")
             console.print(f"Canonical solution:")
             print_code_snippet(sample["canonical_solution"], console)
             generated_code = extract_code_block(generated, "python")[0]
@@ -621,14 +623,14 @@ class CodeContests(HumanEval):
             "humaneval",
             "openai/openai_humaneval",
             "humaneval",
-            "code-eval-exec",
+            "exec",
             "test",
         ),
         EvalTask(
             "humaneval",
             "google-research-datasets/mbpp",
             "mbpp",
-            "code-eval-ast",
+            "ast",
             "train",
         ),
     ]

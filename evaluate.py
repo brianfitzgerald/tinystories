@@ -14,7 +14,7 @@ from synthetic_data.generation import (
     GenerationSource,
     GenerationWrapper,
 )
-from synthetic_data.tasks import ALL_TASKS, EvalResult, evaluate_code_results
+from synthetic_data.tasks import ALL_TASKS, EvalResult, evaluate_codecontests
 from synthetic_data.utils import Conversation, dictl
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +31,7 @@ async def sample_worker(
 async def main(
     batch_size: int = 8,
     task_name: str = "codecontests",
-    gen_source: str = GenerationSource.OPENAI.value,
+    gen_source: str = GenerationSource.GEMINI.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)
@@ -62,7 +62,7 @@ async def main(
                         )
                     )
                 results: List[tuple[str, dict]] = await asyncio.gather(*all_futures)
-                eval_results.extend(evaluate_code_results(console, results))
+                eval_results.extend(evaluate_codecontests(console, results, eval_task))
                 progress.advance(prog_task, 1)
 
     n_all_tests_passed = sum(
