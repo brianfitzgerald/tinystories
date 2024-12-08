@@ -143,6 +143,13 @@ class AssertToBoolTransformer(ast.NodeTransformer):
         return ast.copy_location(append_expr, node)
 
 
+class RemoveMetadataTransformer(ast.NodeTransformer):
+    def visit_Assign(self, node):
+        # Check if the target of the assignment is METADATA
+        if any(isinstance(target, ast.Name) and target.id == "METADATA" for target in node.targets):
+            return None  # Remove this node
+        return node  # Keep other nodes
+
 def assertions_to_tests(test_code: str, entrypoint: str):
     test_code = test_code.replace("candidate(", entrypoint + "(")
 
@@ -150,6 +157,7 @@ def assertions_to_tests(test_code: str, entrypoint: str):
 
     transformer = AssertToBoolTransformer("results")
     transformed_tree = transformer.visit(tree)
+    transformed_tree = RemoveMetadataTransformer().visit(transformed_tree)
 
     transformed_code = ast.unparse(transformed_tree)
     return transformed_code, transformer.n_asserts
@@ -182,7 +190,8 @@ def evaluate_sample_humaneval(
     Returns an error message and a list of test results.
     """
     tests, n_asserts = assertions_to_tests(tests, entrypoint)
-    full_code = sample + solution + tests + "\ncheck()"
+    full_code = sample + solution + "\n" + tests + "\ncheck()"
+    print(full_code)
     try:
         fn_out = evaluate_python_code_ast(
             full_code,
