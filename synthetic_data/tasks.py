@@ -13,7 +13,11 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from evaluation.code_execution import (
+    CodeContestsProblem,
     EvalTask,
+    HumanEvalProblem,
+    MBPPProblem,
+    _convert_mbpp_to_humaneval,
     evaluate_python_code_exec,
     evaluate_sample_humaneval,
     print_code_snippet,
@@ -517,28 +521,6 @@ class HumanEval(DPOTask):
             )
         return res
 
-
-@dataclass
-class CodeContestsProblem:
-    source: int
-    difficulty: int
-    name: str
-    description: str
-    public_tests: Dict
-    private_tests: Dict
-    cf_rating: int
-    cf_points: float
-
-
-@dataclass
-class HumanEvalProblem:
-    task_id: str
-    prompt: str
-    canonical_solution: str
-    test: str
-    entry_point: str
-
-
 class CodeContests(HumanEval):
 
     seed_data_format = SeedDataFormat.HF_DATASET
@@ -549,13 +531,13 @@ class CodeContests(HumanEval):
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
     eval_tasks = [
-        EvalTask(
-            "humaneval",
-            "openai/openai_humaneval",
-            "humaneval",
-            "exec",
-            "test",
-        ),
+        # EvalTask(
+        #     "humaneval",
+        #     "openai/openai_humaneval",
+        #     "humaneval",
+        #     "exec",
+        #     "test",
+        # ),
         EvalTask(
             "humaneval",
             "google-research-datasets/mbpp",
@@ -574,14 +556,17 @@ class CodeContests(HumanEval):
         self, sample: Dict, eval_task: Optional[EvalTask] = None
     ) -> Conversation:
         if eval_task:
+            problem = None
             if eval_task.code_task_format == "humaneval":
                 problem = HumanEvalProblem(**sample)
-                return format_codecontests_generation_prompt(problem.prompt)
             elif eval_task.code_task_format == "mbpp":
-                sample_dc = CodeContestsProblem(**sample)
-                return format_codecontests_generation_prompt(
-                    sample_dc.description,
-                )
+                mbpp_problem = MBPPProblem(**sample)
+                problem = _convert_mbpp_to_humaneval(mbpp_problem)
+            else:
+                raise ValueError(f"Invalid code task format: {eval_task.code_task_format}")
+            return format_codecontests_generation_prompt(
+                problem.prompt,
+            )
         return format_codecontests_generation_prompt(sample["description"])
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:

@@ -3,7 +3,7 @@ import traceback
 from typing import Any, Callable, List, Optional, Tuple
 from rich.syntax import Syntax
 from rich.console import Console
-from typing import Optional, Callable, Literal
+from typing import Optional, Callable, Literal, Dict
 import ast
 import contextlib
 import io
@@ -339,30 +339,35 @@ def evaluate_codecontests(
     console: Console, results: list[tuple[str, dict]], eval_task: EvalTask
 ) -> List[EvalResult]:
     results_batch: List[EvalResult] = []
-    for result, sample in results:
+    for result, sample_dict in results:
         for generated in result:
-            console.print(f"Function name: {sample['entry_point']}")
+            if eval_task.code_task_format == "mbpp":
+                sample = _convert_mbpp_to_humaneval(MBPPProblem(*sample_dict))
+            else:
+                sample = HumanEvalProblem(*sample_dict)
+            console.print(f"Function name: {sample.task_id}")
             console.print(f"Canonical solution:")
-            print_code_snippet(sample["canonical_solution"], console)
+            print_code_snippet(sample.canonical_solution, console)
             generated_code = extract_code_block(generated, "python")[0]
+            prompt = "" if sample.prompt == "text" else sample.prompt
             exec_err, evaluation_results = evaluate_sample_humaneval(
-                sample["prompt"],
+                prompt,
                 generated_code,
-                sample["test"],
-                sample["entry_point"],
+                sample.test,
+                sample.entry_point,
             )
             console.print(f"Generated solution:")
             print_code_snippet(generated_code, console)
             console.print(f"Test code:")
-            print_code_snippet(sample["test"], console)
+            print_code_snippet(sample.test, console)
             _print_test_results(exec_err, evaluation_results, console)
             console.print("=" * console.size.width)
             results_batch.append(
                 EvalResult(
-                    sample["prompt"],
+                    prompt,
                     generated_code,
-                    sample["test"],
-                    sample["entry_point"],
+                    sample.test,
+                    sample.entry_point,
                     exec_err,
                     evaluation_results,
                 )
@@ -412,3 +417,43 @@ def eval_results_to_markdown(evalresults: List[EvalResult]) -> List[str]:
         md_lines.extend(["", "---", ""])
 
     return md_lines
+
+
+@dataclass
+class CodeContestsProblem:
+    source: int
+    difficulty: int
+    name: str
+    description: str
+    public_tests: Dict
+    private_tests: Dict
+    cf_rating: int
+    cf_points: float
+
+
+@dataclass
+class HumanEvalProblem:
+    task_id: str
+    prompt: str
+    canonical_solution: str
+    test: str
+    entry_point: str
+
+@dataclass
+class MBPPProblem:
+    task_id: str
+    text: str
+    code: str
+    test_list: List[str]
+    test_setup_code: str
+    challenge_test_list: List[str]
+
+
+def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
+    return HumanEvalProblem(
+        task_id=sample.task_id,
+        prompt=sample.text,
+        canonical_solution=sample.code,
+        test=sample.test_setup_code,
+        entry_point=sample.code,
+    )
