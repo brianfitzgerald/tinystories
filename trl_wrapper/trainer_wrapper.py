@@ -11,12 +11,10 @@ from peft.tuners.lora.config import LoraConfig
 from peft.utils.constants import DUMMY_TARGET_MODULES
 from torch.amp.autocast_mode import autocast
 from tqdm import tqdm
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    PreTrainedTokenizer,
-)
+from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+from transformers.models.auto.tokenization_auto import AutoTokenizer
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.utils.quantization_config import BitsAndBytesConfig
 from trl import DPOConfig, DPOTrainer
 from trl.trainer.dpo_trainer import PreferenceCollator
 
@@ -36,7 +34,7 @@ DataModuleChoice = Literal["ultra_feedback", "code_contests"]
 
 @dataclass
 class WrapperConfig:
-    model_id: str = LLAMA_3_2_1B
+    model_id_or_path: str = LLAMA_3_2_1B
     single_process_mode: bool = False
     max_seq_length: int = 1512
     prompt_length: int = 1024
@@ -50,10 +48,15 @@ class WrapperConfig:
     wandb_project_name: str = "codecontests-llama-3b"
     n_epochs: int = 1
     max_eval_dataset_size: Optional[int] = None
+    # adapter to load before training
+    adapter_path: Optional[str] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
-    model_id=LLAMA_3_2_1B, max_samples=10000, using_filtered_logprobs=True, n_epochs=10
+    model_id_or_path=LLAMA_3_2_1B,
+    max_samples=10000,
+    using_filtered_logprobs=True,
+    n_epochs=10,
 )
 
 
@@ -72,15 +75,17 @@ class TrainerWrapper:
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
 
-        logger.info(f"Loading model {self.config.model_id}")
+        logger.info(f"Loading model {self.config.model_id_or_path}")
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.config.model_id,
+            self.config.model_id_or_path,
             device_map="auto",
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
             quantization_config=bnb_config,
+            ignore_mismatched_sizes=True,
         )
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id)  # type: ignore
+
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id_or_path)  # type: ignore
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
         self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
         self.model.resize_token_embeddings(len(self.tokenizer))
@@ -162,7 +167,7 @@ class TrainerWrapper:
             loss_type="sigmoid",
             generate_during_eval=True,
             run_name=random_run_name,
-            output_dir="../outputs",
+            output_dir="outputs",
         )
 
         self.ref_logpbrobs_cache_location = (
