@@ -240,7 +240,7 @@ class redirect_stdin(contextlib._RedirectStream):  # type: ignore
 
 @timeout(2)
 def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str, timeout_sec: float = 10
+    code_to_run: str, test_inputs: str
 ) -> Tuple[Optional[str], Any]:
 
     inputs_idx = 0
@@ -348,13 +348,14 @@ def evaluate_codecontests(
             if eval_task.code_task_format == "mbpp":
                 mbpp_problem = MBPPProblem(**sample_dict)
                 sample = _convert_mbpp_to_humaneval(mbpp_problem)
+                tests, n_asserts = assertions_to_tests(sample.test, sample.entry_point)
                 n_asserts = len(mbpp_problem.test_list)
-                full_code = generated_code + "\n" + sample.test + "\ncheck()"
+                full_code = generated_code + "\n" + tests + "\ncheck()"
             elif eval_task.code_task_format == "humaneval":
                 sample = HumanEvalProblem(**sample_dict)
                 tests, n_asserts = assertions_to_tests(tests, sample.entry_point)
                 full_code = generated_code + "\n" + tests + "\ncheck()"
-            console.print(f"Function name: {sample.task_id}")
+            console.print(f"Evaluating sample: {sample.task_id}")
             console.print(f"Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
             prompt = "" if sample.prompt == "text" else sample.prompt

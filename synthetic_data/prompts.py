@@ -383,7 +383,7 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
     return conv
 
 
-def format_codecontests_generation_prompt(description: str, fn_name: Optional[str]) -> Conversation:
+def format_codecontests_generation_prompt(description: str, fn_name: Optional[str] = None) -> Conversation:
     conv: Conversation = [
         {
             "role": "system",
