@@ -1,32 +1,37 @@
-import torch
-from transformers.generation.configuration_utils import GenerationConfig
 from threading import Thread
+from typing import List, Optional
 
 import fire
-from typing import Optional, List
-
-from transformers.generation.streamers import TextIteratorStreamer
+import gradio as gr
+import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import gradio as gr
-from train_trl import LLAMA_CONFIG, TrainerWrapper
 from loguru import logger
+from pydantic import BaseModel
+from transformers.generation.configuration_utils import GenerationConfig
+from transformers.generation.streamers import TextIteratorStreamer
+
+from train_trl import LLAMA_CONFIG, TrainerWrapper
+from trl_wrapper.trainer_wrapper import WrapperConfig
+from synthetic_data.utils import Conversation
 
 
 class CompletionRequest(BaseModel):
-    prompts: List[str]
+    conversations: List[Conversation]
     max_length: Optional[int] = None
 
 
 def do_inference_api(
-    prompts: List[str],
+    prompts: List[Conversation],
     max_tokens: Optional[int],
     tokenizer,
     model,
     device: torch.device,
 ) -> List[str]:
-    batch = tokenizer(prompts, return_tensors="pt", add_special_tokens=True)
+    # TODO allow for batch_size > 1
+    batch = tokenizer.apply_chat_template(
+        prompts, return_tensors="pt", tokenize=True, add_special_tokens=True
+    )
 
     with torch.no_grad():
         max_tokens_val = max_tokens or 512
@@ -44,16 +49,16 @@ def do_inference_api(
         )
         logger.info(f"Generating with max_tokens={max_tokens_val}")
         generated = model.generate(
-            inputs=batch["input_ids"].to(device),
+            inputs=batch.to(device),
             generation_config=generation_config,
         )
     logger.info(f"Decoding response")
-    decoded_responses = tokenizer.batch_decode(generated["sequences"].cpu().tolist())
+    decoded_responses = tokenizer.decode(generated["sequences"][0][len(batch[0]):], skip_special_tokens=True)
     logger.info(f"Decoded responses: {decoded_responses}")
     return decoded_responses
 
 
-def do_inference_streaming(
+def do_inference_gradio(
     tokenizer,
     model,
     chat: bool,
@@ -120,37 +125,50 @@ def do_inference_streaming(
     )
 
 
-def main(
-    gradio: bool = False,
-):
+def main(gradio: bool = False, model_dir="outputs/checkpoint-3080"):
     app = FastAPI()
 
-    wrapper = TrainerWrapper(LLAMA_CONFIG)
+    config = WrapperConfig(
+        model_id_or_path=LLAMA_CONFIG.model_id_or_path,
+        adapter_path="outputs/checkpoint-3080",
+    )
+    wrapper = TrainerWrapper(config)
     logger.info("Initializing model")
     wrapper.init_model()
 
-    model = wrapper.model.eval()
+    # Have to load adapter afterwards as the embeddings need to be loaded first
+    # TODO figure out why that is needed
+    if config.adapter_path:
+        logger.info(f"Loading adapter from {config.adapter_path}")
+        wrapper.model.load_adapter(config.adapter_path)
+
+    wrapper.model = wrapper.model.eval()
     tokenizer = wrapper.tokenizer
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device {device}")
 
     @app.post("/generate")
-    async def generate_completion(request: CompletionRequest):
+    async def generate(request: CompletionRequest):
         try:
             completions = do_inference_api(
-                request.prompts, request.max_length, tokenizer, model, device
+                request.conversations,
+                request.max_length,
+                tokenizer,
+                wrapper.model,
+                device,
             )
             return {"completions": completions}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-    
+
     @app.get("/status")
     async def get_status():
         return {"status": "ok"}
 
     if gradio:
         logger.info(f"Starting Gradio interface, using device {device}")
-        do_inference_streaming(tokenizer, model, chat=True, device=device)
+        do_inference_gradio(tokenizer, wrapper.model, chat=True, device=device)
     else:
         logger.info("Starting API")
         uvicorn.run(app, host="0.0.0.0", port=8080)
