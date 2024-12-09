@@ -13,6 +13,8 @@ from contextlib import redirect_stdout, redirect_stderr, contextmanager
 from wrapt_timeout_decorator import timeout
 from dataclasses import dataclass
 from abc import ABC
+from loguru import logger
+import re
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 from synthetic_data.utils import extract_code_block
@@ -189,19 +191,16 @@ ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
 ]
 
 
-def evaluate_sample_humaneval(
-    sample: str, solution: str, tests: str, entrypoint: str
-) -> Tuple[Optional[str], List]:
+def evaluate_sample_ast(full_code: str, n_asserts: int) -> Tuple[Optional[str], List]:
     """
     Evaluate a code snippet against a set of tests.
     Returns an error message and a list of test results.
     """
-    tests, n_asserts = assertions_to_tests(tests, entrypoint)
-    full_code = sample + solution + "\n" + tests + "\ncheck()"
     try:
+        allowed_fns = {**ALLOWED_FN_DICT}
         fn_out = evaluate_python_code_ast(
             full_code,
-            ALLOWED_FN_DICT,
+            allowed_fns,
             authorized_imports=ALLOWED_IMPORTS,
         )
         return None, fn_out  # type: ignore
@@ -341,21 +340,25 @@ def evaluate_codecontests(
     results_batch: List[EvalResult] = []
     for result, sample_dict in results:
         for generated in result:
+            full_code = generated
+            code_snippets = extract_code_block(generated, "python")
+            generated_code = code_snippets[0]
+            if len(code_snippets) > 1:
+                logger.warning("Multiple code snippets found in generated code")
             if eval_task.code_task_format == "mbpp":
-                sample = _convert_mbpp_to_humaneval(MBPPProblem(**sample_dict))
-            else:
+                mbpp_problem = MBPPProblem(**sample_dict)
+                sample = _convert_mbpp_to_humaneval(mbpp_problem)
+                n_asserts = len(mbpp_problem.test_list)
+                full_code = generated_code + "\n" + sample.test + "\ncheck()"
+            elif eval_task.code_task_format == "humaneval":
                 sample = HumanEvalProblem(**sample_dict)
+                tests, n_asserts = assertions_to_tests(tests, sample.entry_point)
+                full_code = generated_code + "\n" + tests + "\ncheck()"
             console.print(f"Function name: {sample.task_id}")
             console.print(f"Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
-            generated_code = extract_code_block(generated, "python")[0]
             prompt = "" if sample.prompt == "text" else sample.prompt
-            exec_err, evaluation_results = evaluate_sample_humaneval(
-                prompt,
-                generated_code,
-                sample.test,
-                sample.entry_point,
-            )
+            exec_err, evaluation_results = evaluate_sample_ast(full_code, n_asserts)
             console.print(f"Generated solution:")
             print_code_snippet(generated_code, console)
             console.print(f"Test code:")
@@ -439,6 +442,7 @@ class HumanEvalProblem:
     test: str
     entry_point: str
 
+
 @dataclass
 class MBPPProblem:
     task_id: str
@@ -448,6 +452,10 @@ class MBPPProblem:
     test_setup_code: str
     challenge_test_list: List[str]
 
+
+def get_fn_name_from_assert(code: str):
+    match = re.search(r"\bassert\s+([a-zA-Z_]\w*)\s*\(", code)
+    return match.group(1) if match else None
 
 def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
     test_code = "\n\t".join(sample.test_list)

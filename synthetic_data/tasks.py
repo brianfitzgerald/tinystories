@@ -19,7 +19,8 @@ from evaluation.code_execution import (
     MBPPProblem,
     _convert_mbpp_to_humaneval,
     evaluate_python_code_exec,
-    evaluate_sample_humaneval,
+    evaluate_sample_ast,
+    get_fn_name_from_assert,
     print_code_snippet,
 )
 from synthetic_data.conversion import chatml_to_conversation
@@ -497,12 +498,9 @@ class HumanEval(DPOTask):
                     .replace("```", "")
                 )
                 print_code_snippet(completion, self.console)
-                err, results = evaluate_sample_humaneval(
-                    completion,
-                    sample["entry_point"],
-                    sample["test"],
-                    sample["entry_point"],
-                )
+                # TODO fix
+                full_code = sample["entry_point"] + "\n" + sample["test"]
+                err, results = evaluate_sample_ast(full_code, 1)
                 tests_passed = sum(results)
                 if tests_passed > best_score:
                     best_score = tests_passed
@@ -557,20 +555,25 @@ class CodeContests(HumanEval):
         self, sample: Dict, eval_task: Optional[EvalTask] = None
     ) -> Conversation:
         if eval_task:
-            problem = None
+            problem, fn_name = None, None
             if eval_task.code_task_format == "humaneval":
                 problem = HumanEvalProblem(**sample)
             elif eval_task.code_task_format == "mbpp":
                 mbpp_problem = MBPPProblem(**sample)
                 problem = _convert_mbpp_to_humaneval(mbpp_problem)
+                fn_name = get_fn_name_from_assert(mbpp_problem.test_list[0])
+                assert (
+                    fn_name
+                ), f"Could not find function name for problem {mbpp_problem.task_id}"
+                problem.entry_point = fn_name
             else:
                 raise ValueError(
                     f"Invalid code task format: {eval_task.code_task_format}"
                 )
             return format_codecontests_generation_prompt(
-                problem.prompt,
+                problem.prompt, fn_name
             )
-        return format_codecontests_generation_prompt(sample["description"])
+        return format_codecontests_generation_prompt(sample["description"], None)
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         input_batch = dictl(batch)

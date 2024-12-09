@@ -1,3 +1,4 @@
+from typing import Optional
 from synthetic_data.generation import Conversation
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_system_message_param import (
@@ -382,12 +383,12 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
     return conv
 
 
-def format_codecontests_generation_prompt(description: str) -> Conversation:
+def format_codecontests_generation_prompt(description: str, fn_name: Optional[str]) -> Conversation:
     conv: Conversation = [
         {
             "role": "system",
             "content": f"You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
         },
-        {"role": "user", "content": description},
+        {"role": "user", "content": description if not fn_name else f"{description} Name the function `{fn_name}`."},
     ]
     return conv
