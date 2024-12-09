@@ -412,12 +412,7 @@ def eval_results_to_markdown(evalresults: List[EvalResult]) -> List[str]:
         if er.err:
             md_lines.extend(["```", er.err.strip(), "```"])
         md_lines.extend(["", "**Tests Passed:**"])
-        md_lines.extend(
-            [
-                f"- Test {idx}: {'✓' if passed else '✗'}"
-                for idx, passed in enumerate(er.tests_pass, start=1)
-            ]
-        )
+        md_lines.extend(["✓" if passed else "✗" for passed in er.tests_pass])
         md_lines.extend(["", "---", ""])
 
     return md_lines
@@ -457,6 +452,7 @@ class MBPPProblem:
 def get_fn_name_from_assert(code: str):
     match = re.search(r"\bassert\s+([a-zA-Z_]\w*)\s*\(", code)
     return match.group(1) if match else None
+
 
 def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
     test_code = "\n\t".join(sample.test_list)
