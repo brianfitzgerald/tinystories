@@ -530,13 +530,13 @@ class CodeContests(HumanEval):
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
     eval_tasks = [
-        # EvalTask(
-        #     "humaneval",
-        #     "openai/openai_humaneval",
-        #     "humaneval",
-        #     "exec",
-        #     "test",
-        # ),
+        EvalTask(
+            "humaneval",
+            "openai/openai_humaneval",
+            "humaneval",
+            "exec",
+            "test",
+        ),
         EvalTask(
             "humaneval",
             "google-research-datasets/mbpp",
@@ -548,7 +548,7 @@ class CodeContests(HumanEval):
 
     def __init__(self, console) -> None:
         super().__init__(console)
-        self.n_completions_per_sample = 3
+        self.n_completions_per_sample = 4
         self.print_definitions = False
 
     def format_inference_conversation(
@@ -617,7 +617,6 @@ class CodeContests(HumanEval):
                     problem.public_tests["input"], problem.public_tests["output"]
                 ):
                     expected_test_output: List[str] = expected_test_output.strip().split("\n")  # type: ignore
-                    logger.info(f"Running test for completion {j}...")
                     err, execution_output = evaluate_python_code_exec(
                         completion, test_input
                     )
@@ -660,7 +659,7 @@ class CodeContests(HumanEval):
                 flattened_tests = flatten_list(test_results_for_completion)
                 n_tests_passed = sum(flattened_tests)
                 logger.info(
-                    f"Tests passed for completion {i}: {n_tests_passed} / {len(flattened_tests)}"
+                    f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
                 )
                 if n_tests_passed > best_score:
                     best_score = n_tests_passed

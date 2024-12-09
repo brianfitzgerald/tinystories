@@ -29,10 +29,10 @@ from synthetic_data.utils import (
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 4,
+    batch_size: int = 2,
     restart: bool = False,
     resume_input_position: bool = True,
-    generation_source: GenerationSource = GenerationSource.OPENAI,
+    model: str = GenerationSource.OPENAI.value,
     task_name: str = "codecontests",
     n_epochs: int = 5,
     **kwargs,
@@ -55,6 +55,7 @@ def main(
     logger.info(f"Logging in with token: {hf_token}")
     login(token=hf_token, add_to_git_credential=True)
 
+    generation_source = GenerationSource(model)
     model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
 
     logger.info("Loading output dataset...")

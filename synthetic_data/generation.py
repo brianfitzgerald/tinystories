@@ -122,10 +122,11 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     model=self.model_name,
                     messages=conversation,
                     temperature=self.temperature,
-                    max_completion_tokens=self.max_tokens,
+                    # max_completion_tokens=self.max_tokens,
                 )
                 completion_requests.append(request)
             try:
+                logger.info(f"Generating {len(completion_requests)} requests with {self.model_name}, max concurrent: {self.max_concurrent}")
                 results: List[ChatCompletion] = await gather_with_concurrency_limit(
                     self.max_concurrent, *completion_requests
                 )
@@ -161,8 +162,8 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.model_name = "meta-llama/llama-3.1-70b-instruct:free"
-        self.max_concurrent = 8
+        self.model_name = "meta-llama/llama-3.1-70b-instruct"
+        self.max_concurrent = 4
         self.temperature = 0.4
 
 
@@ -210,10 +211,10 @@ class GeminiWrapper(OpenAIGenerationWrapper):
             raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
         self.oai_client = AsyncOpenAI(
             api_key=api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
         self.model_name = "gemini-1.5-flash-8b"
-        self.max_concurrent = 8
+        self.max_concurrent = 4
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
         self.max_tokens = 8192
