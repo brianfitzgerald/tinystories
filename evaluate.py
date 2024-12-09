@@ -31,9 +31,9 @@ async def sample_worker(
 
 
 async def main(
-    batch_size: int = 4,
+    batch_size: int = 1,
     task_name: str = "codecontests",
-    gen_source: str = GenerationSource.GEMINI.value,
+    gen_source: str = GenerationSource.LOCAL.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)

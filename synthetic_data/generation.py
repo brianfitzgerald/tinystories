@@ -9,6 +9,7 @@ from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
 from enum import Enum
 from synthetic_data.utils import Conversation, gather_with_concurrency_limit
+import aiohttp
 
 
 SHAREGPT_TO_OPENAI_ROLE = {
@@ -57,6 +58,24 @@ class MockGenerator(GenerationWrapper):
         if self.mock_completions:
             return self.mock_completions
         return [MOCK_SNIPPET] * len(conversations)
+
+
+class LocalGenerator(GenerationWrapper):
+    def __init__(self, _: Dict[str, str]):
+        pass
+
+    async def generate(self, conversations: List[Conversation]) -> List[str]:
+        url = "http://0.0.0.0:8080/generate"
+        payload = {"conversations": conversations}
+        headers = {"Content-Type": "application/json"}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as response:
+                logger.info(f"Generate request status: {response.status}")
+                if response.status != 200:
+                    raise ValueError(f"Failed to generate: {response.status}")
+                response_body = await response.json()
+                return response_body["completions"]
 
 
 class VLLMWrapper(GenerationWrapper):
@@ -217,4 +236,5 @@ MODEL_WRAPPER_CLASSES = {
     GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
     GenerationSource.GEMINI: GeminiWrapper,
     GenerationSource.MOCK: MockGenerator,
+    GenerationSource.LOCAL: LocalGenerator,
 }
