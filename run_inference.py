@@ -34,9 +34,9 @@ def do_inference_api(
     )
 
     with torch.no_grad():
-        max_tokens_val = max_tokens or 512
+        max_tokens = max_tokens or 1024
         generation_config = GenerationConfig(
-            max_new_tokens=max_tokens_val,
+            max_new_tokens=max_tokens,
             bos_token_id=tokenizer.bos_token_id,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.pad_token_id,
@@ -47,7 +47,7 @@ def do_inference_api(
             output_hidden_states=False,
             output_scores=False,
         )
-        logger.info(f"Generating with max_tokens={max_tokens_val}")
+        logger.info(f"Generating with max_tokens={max_tokens}")
         generated = model.generate(
             inputs=batch.to(device),
             generation_config=generation_config,
@@ -126,7 +126,7 @@ def do_inference_gradio(
 
 
 def main(gradio: bool = False, model_dir="outputs/checkpoint-3080"):
-    app = FastAPI()
+    app = FastAPI(debug=True)
 
     config = WrapperConfig(
         model_id_or_path=LLAMA_CONFIG.model_id_or_path,
