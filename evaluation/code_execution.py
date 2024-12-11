@@ -342,6 +342,9 @@ def evaluate_codecontests(
         for generated in result:
             full_code = generated
             code_snippets = extract_code_block(generated, "python")
+            if len(code_snippets) == 0:
+                logger.warning("No code snippets found in generated code")
+                continue
             generated_code = code_snippets[0]
             if len(code_snippets) > 1:
                 logger.warning("Multiple code snippets found in generated code")
@@ -353,7 +356,7 @@ def evaluate_codecontests(
                 full_code = generated_code + "\n" + tests + "\ncheck()"
             elif eval_task.code_task_format == "humaneval":
                 sample = HumanEvalProblem(**sample_dict)
-                tests, n_asserts = assertions_to_tests(tests, sample.entry_point)
+                tests, n_asserts = assertions_to_tests(sample.test, sample.entry_point)
                 full_code = generated_code + "\n" + tests + "\ncheck()"
             console.print(f"Evaluating sample: {sample.task_id}")
             console.print(f"Canonical solution:")

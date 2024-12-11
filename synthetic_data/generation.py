@@ -75,7 +75,9 @@ class LocalGenerator(GenerationWrapper):
                 if response.status != 200:
                     raise ValueError(f"Failed to generate: {response.status}")
                 response_body = await response.json()
-                return response_body["completions"]
+                completions = response_body["completions"]
+                completions = [completions]
+                return completions
 
 
 class VLLMWrapper(GenerationWrapper):

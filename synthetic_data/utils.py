@@ -6,6 +6,7 @@ import json
 from loguru import logger
 from pathlib import Path
 import shutil
+import ast
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from tabulate import tabulate
@@ -223,8 +224,20 @@ def ensure_directory(directory: str, clear: bool = True):
 
 
 def extract_code_block(msg: str, language: str = "python") -> List[str]:
+    """
+    Extract a code block from a message. If none are found, treat the entire message as a code block.
+    """
     match_pattern = rf"```(?:{language})?\n(.*?)\n```"
     blocks = re.findall(match_pattern, msg, re.DOTALL)
+
+    if not blocks:
+        msg = msg.lstrip("assistant\n\n")
+        try:
+            ast.parse(msg)
+        except SyntaxError:
+            return []
+        blocks = [msg]
+
     return blocks
 
 
