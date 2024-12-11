@@ -66,7 +66,7 @@ class LocalGenerator(GenerationWrapper):
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         url = "http://0.0.0.0:8080/generate"
-        payload = {"conversations": conversations}
+        payload = {"conversations": conversations, "max_length": 4096}
         headers = {"Content-Type": "application/json"}
 
         async with aiohttp.ClientSession() as session:

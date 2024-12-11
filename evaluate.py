@@ -29,6 +29,20 @@ async def sample_worker(
     out = await model_wrapper.generate([prompt])
     return out, sample
 
+def _save_eval_results_to_csv(eval_results: List[EvalResult], out_dir: str):
+    test_results_dicts = []
+    for res in eval_results:
+        test_results_dicts.append(
+            {
+                "task_id": res.task_id,
+                "err": res.err,
+                "evaluation_results": res.tests_pass,
+            }
+        )
+
+    test_results_pd = pd.DataFrame(test_results_dicts)
+    test_results_pd.to_csv(f"{out_dir}/test_results.csv", index=False)
+
 
 async def main(
     batch_size: int = 1,
@@ -71,11 +85,14 @@ async def main(
                         )
                     )
                 results: List[tuple[str, dict]] = await asyncio.gather(*all_futures)
+
                 eval_results.extend(evaluate_codecontests(console, results, eval_task))
                 progress.advance(prog_task, 1)
                 md_out_lines.extend(eval_results_to_markdown(eval_results))
                 with open(f"{out_dir}/eval_results.md", "w") as f:
                     f.write("\n".join(md_out_lines))
+
+                _save_eval_results_to_csv(eval_results, out_dir)
 
     n_all_tests_passed = sum(
         sum(res.tests_pass) == len(res.tests_pass) for res in eval_results
@@ -87,21 +104,6 @@ async def main(
     )
     console.print(f"Total tests passed: {n_tests_passed}/{total_n_tests}")
 
-    test_results_dicts = []
-    for res in eval_results:
-        test_results_dicts.append(
-            {
-                "prompt": res.prompt,
-                "generated": res.generated_code,
-                "test": res.test,
-                "entry_point": res.entry_point,
-                "err": res.err,
-                "evaluation_results": res.tests_pass,
-            }
-        )
-
-    test_results_pd = pd.DataFrame(test_results_dicts)
-    test_results_pd.to_csv(f"{out_dir}/test_results.csv", index=False)
-
+    _save_eval_results_to_csv(eval_results, out_dir)
 
 Fire(main)

@@ -188,6 +188,7 @@ ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
     "hashlib",
     "string",
     "collections",
+    "functools",
 ]
 
 
@@ -332,6 +333,7 @@ class EvalResult:
     entry_point: str
     err: Optional[str]
     tests_pass: List[bool]
+    task_id: str
 
 
 def evaluate_codecontests(
@@ -377,6 +379,7 @@ def evaluate_codecontests(
                     sample.entry_point,
                     exec_err,
                     evaluation_results,
+                    sample.task_id
                 )
             )
     return results_batch

@@ -34,7 +34,7 @@ def do_inference_api(
     )
 
     with torch.no_grad():
-        max_tokens = max_tokens or 1024
+        max_tokens = max_tokens or 2048
         generation_config = GenerationConfig(
             max_new_tokens=max_tokens,
             bos_token_id=tokenizer.bos_token_id,
