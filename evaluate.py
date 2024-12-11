@@ -35,8 +35,9 @@ def _save_eval_results_to_csv(eval_results: List[EvalResult], out_dir: str):
         test_results_dicts.append(
             {
                 "task_id": res.task_id,
-                "err": res.err,
+                "err": res.err is not None,
                 "evaluation_results": res.tests_pass,
+                "task": res.task
             }
         )
 

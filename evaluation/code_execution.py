@@ -334,6 +334,7 @@ class EvalResult:
     err: Optional[str]
     tests_pass: List[bool]
     task_id: str
+    task: EvalTask
 
 
 def evaluate_codecontests(
@@ -379,7 +380,8 @@ def evaluate_codecontests(
                     sample.entry_point,
                     exec_err,
                     evaluation_results,
-                    sample.task_id
+                    sample.task_id,
+                    eval_task
                 )
             )
     return results_batch
@@ -418,7 +420,8 @@ def eval_results_to_markdown(evalresults: List[EvalResult]) -> List[str]:
         if er.err:
             md_lines.extend(["```", er.err.strip(), "```"])
         md_lines.extend(["", "**Tests Passed:**"])
-        md_lines.extend(["✓" if passed else "✗" for passed in er.tests_pass])
+        pass_checks = ["✓" if passed else "✗" for passed in er.tests_pass]
+        md_lines.extend(" ".join(pass_checks))
         md_lines.extend(["", "---", ""])
 
     return md_lines
