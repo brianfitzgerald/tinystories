@@ -8,7 +8,11 @@ from anthropic.types.message import Message
 from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
 from enum import Enum
-from synthetic_data.utils import Conversation, gather_with_concurrency_limit
+from synthetic_data.utils import (
+    Conversation,
+    DatasetFormat,
+    gather_with_concurrency_limit,
+)
 import aiohttp
 
 
@@ -19,16 +23,23 @@ SHAREGPT_TO_OPENAI_ROLE = {
 }
 
 
-def upload_dataset(
-    hf_dataset: Dataset, dataset_name: str, new_dataset_rows: List[Dict]
+def save_output_dataset(
+    hf_dataset: Dataset,
+    dataset_name: str,
+    new_dataset_rows: List[Dict],
+    format: DatasetFormat,
 ):
     dataset_new_rows = Dataset.from_list(new_dataset_rows)
-    dataset_new_rows.to_csv(f"dataset_samples/{dataset_name}.csv")
+    concatted_dataset = concatenate_datasets([hf_dataset, dataset_new_rows])
 
-    concat_dataset = concatenate_datasets([hf_dataset, dataset_new_rows])
-
-    logger.info(f"Uploading {len(new_dataset_rows)} new rows to the Hub...")
-    concat_dataset.push_to_hub(dataset_name)
+    if format == DatasetFormat.HF_DATASET:
+        logger.info(f"Uploading {len(new_dataset_rows)} new rows to the Hub...")
+        concatted_dataset.push_to_hub(dataset_name)
+    elif format == DatasetFormat.PARQUET:
+        logger.info(f"Saving {len(new_dataset_rows)} new rows to parquet...")
+        concatted_dataset.to_parquet(f"{dataset_name}.parquet")
+    else:
+        raise ValueError(f"Unsupported output format: {format}")
 
 
 class GenerationWrapper(ABC):
@@ -128,7 +139,9 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 )
                 completion_requests.append(request)
             try:
-                logger.info(f"Generating {len(completion_requests)} requests with {self.model_name}, max concurrent: {self.max_concurrent}")
+                logger.info(
+                    f"Generating {len(completion_requests)} requests with {self.model_name}, max concurrent: {self.max_concurrent}"
+                )
                 results: List[ChatCompletion] = await gather_with_concurrency_limit(
                     self.max_concurrent, *completion_requests
                 )

@@ -67,7 +67,7 @@ class SyntheticToolCallDPORow:
     agent_output_rejected: str
 
 
-class SeedDataFormat(Enum):
+class DatasetFormat(Enum):
     TSV = "tsv"
     HF_DATASET = "hf_dataset"
     # Synthetic means the data is generated from a synthetic source, so no initial data is loaded

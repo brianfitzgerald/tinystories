@@ -21,11 +21,12 @@ from synthetic_data.generation import (
     GenerationWrapper,
     GenerationSource,
     MockGenerator,
-    upload_dataset,
+    save_output_dataset,
 )
 from synthetic_data.utils import (
-    SeedDataFormat,
+    DatasetFormat,
 )
+
 
 def main(
     upload_every_n_batches: int = 10,
@@ -62,25 +63,27 @@ def main(
     if restart:
         output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
     else:
-        try:
-            output_dataset = cast(
-                Dataset,
-                load_dataset(
-                    f"{task.output_dataset_org}/{task.output_dataset_name}",
-                    split="train",
-                ),
-            )
-            # TODO filter for rows that don't need completion
-        except (EmptyDatasetError, ValueError):
-            logger.info("No existing dataset found, starting from scratch...")
+        if task.output_dataset_format == DatasetFormat.HF_DATASET:
+            try:
+                output_dataset = cast(
+                    Dataset,
+                    load_dataset(
+                        f"{task.output_dataset_org}/{task.output_dataset_name}",
+                        split="train",
+                    ),
+                )
+                # TODO filter for rows that don't need completion
+            except (EmptyDatasetError, ValueError):
+                logger.info("No existing dataset found, starting from scratch...")
+        else:
             output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
 
     input_dataset: Dataset
     input_dataset_location: Optional[str] = None
     if task.seed_data_format in (
-        SeedDataFormat.HF_DATASET,
-        SeedDataFormat.PARQUET,
-        SeedDataFormat.TSV,
+        DatasetFormat.HF_DATASET,
+        DatasetFormat.PARQUET,
+        DatasetFormat.TSV,
     ):
         input_dataset_location = task.seed_data_location
 
@@ -88,15 +91,15 @@ def main(
         f"Loading input dataset: {input_dataset_location}, format: {task.seed_data_format.value}"
     )
     assert input_dataset_location
-    if task.seed_data_format in (SeedDataFormat.HF_DATASET, SeedDataFormat.SYNTHETIC):
+    if task.seed_data_format in (DatasetFormat.HF_DATASET, DatasetFormat.SYNTHETIC):
         if len(output_dataset) > 0 and resume_input_position:
             logger.info(f"Resuming from position {len(output_dataset)}")
             split = f"{split}[{len(output_dataset)}:]"
         input_dataset = cast(Dataset, load_dataset(input_dataset_location, split=split))
-    elif task.seed_data_format == SeedDataFormat.TSV:
+    elif task.seed_data_format == DatasetFormat.TSV:
         seed_data = pd.read_csv(input_dataset_location, on_bad_lines="skip")
         input_dataset = Dataset.from_pandas(seed_data)
-    elif task.seed_data_format == SeedDataFormat.PARQUET:
+    elif task.seed_data_format == DatasetFormat.PARQUET:
         input_dataset = Dataset.from_parquet(input_dataset_location)  # type: ignore
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
@@ -135,8 +138,11 @@ def main(
             output_rows_batch = task.format_output_rows(completions)
             new_dataset_rows.extend(output_rows_batch)
             if batch_idx % upload_every_n_batches == 0 and batch_idx > 0:
-                upload_dataset(
-                    output_dataset, task.output_dataset_name, new_dataset_rows
+                save_output_dataset(
+                    output_dataset,
+                    task.output_dataset_name,
+                    new_dataset_rows,
+                    task.output_dataset_format,
                 )
 
 

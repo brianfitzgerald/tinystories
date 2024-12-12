@@ -7,7 +7,6 @@ from typing import Optional, Callable, Literal, Dict
 import ast
 import contextlib
 import io
-import signal
 from enum import Enum
 from contextlib import redirect_stdout, redirect_stderr, contextmanager
 from wrapt_timeout_decorator import timeout
@@ -381,7 +380,7 @@ def evaluate_codecontests(
                     exec_err,
                     evaluation_results,
                     sample.task_id,
-                    eval_task
+                    eval_task,
                 )
             )
     return results_batch
@@ -437,6 +436,7 @@ class CodeContestsProblem:
     private_tests: Dict
     cf_rating: int
     cf_points: float
+    solutions: Optional[List[str]]
 
 
 @dataclass
@@ -473,3 +473,37 @@ def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
         test=test_code,
         entry_point=sample.code,
     )
+
+
+def evaluate_sample_against_unit_tests(
+    completion: str, test_inputs: List[str], test_outputs: List[str]
+):
+    test_results_for_completion = []
+    for test_input, expected_output_str in zip(test_inputs, test_outputs):
+        expected_output = expected_output_str.strip().split("\n")
+        err, execution_output = evaluate_python_code_exec(completion, test_input)
+        logger.info(
+            f"Test output for completion: {execution_output}, expected: {expected_output}"
+        )
+        if err is not None:
+            logger.info(
+                f"Error in test case execution - error: {err}, results: {execution_output}"
+            )
+            test_results_for_completion.append([False] * len(expected_output))
+            continue
+        if not isinstance(execution_output, list):
+            logger.info(f"Expected list of outputs, got: {type(execution_output)}")
+            test_results_for_completion.append([False] * len(expected_output))
+            continue
+        elif len(execution_output) != len(expected_output):
+            logger.info(
+                f"Length of execution outputs does not match no. of test cases: expected {len(expected_output)}, actual: {len(execution_output)}"
+            )
+            test_results_for_completion.append([False] * len(expected_output))
+            continue
+        else:
+            test_case_results = []
+            for expected, actual in zip(expected_output, execution_output):
+                test_case_results.append(str(expected) == str(actual))
+            test_results_for_completion.append(test_case_results)
+    return test_results_for_completion

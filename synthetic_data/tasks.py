@@ -5,6 +5,7 @@ import traceback
 from abc import ABC
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional
+from enum import Enum
 
 from datasets import Dataset
 from loguru import logger
@@ -19,6 +20,7 @@ from evaluation.code_execution import (
     MBPPProblem,
     _convert_mbpp_to_humaneval,
     evaluate_python_code_exec,
+    evaluate_sample_against_unit_tests,
     evaluate_sample_ast,
     get_fn_name_from_assert,
     print_code_snippet,
@@ -43,7 +45,7 @@ from synthetic_data.tools import (
 from synthetic_data.utils import (
     Conversation,
     ExtractiveQARow,
-    SeedDataFormat,
+    DatasetFormat,
     SyntheticToolCallDPORow,
     SyntheticToolCallRow,
     ToolFormerDPORow,
@@ -59,12 +61,13 @@ from synthetic_data.utils import (
 
 
 class BaseTask(ABC):
-    seed_data_format: SeedDataFormat = SeedDataFormat.SYNTHETIC
+    seed_data_format: DatasetFormat = DatasetFormat.SYNTHETIC
     seed_data_split = "train"
 
     seed_data_location: str
     output_dataset_name: str
     output_dataset_org: str = "roborovski"
+    output_dataset_format: DatasetFormat = DatasetFormat.HF_DATASET
 
     dataset_columns: List[str] = []
 
@@ -107,7 +110,7 @@ class DPOTask(BaseTask):
 
 
 class PromptUpsample(BaseTask):
-    seed_data_format = SeedDataFormat.TSV
+    seed_data_format = DatasetFormat.TSV
     seed_data_location = "gs://openai-datasets/prompt-upsample/seed-data.tsv"
     output_dataset_name = "prompt-upsample"
     output_dataset_org = "openai"
@@ -120,7 +123,7 @@ class PromptUpsample(BaseTask):
 
 
 class Toolformer(DPOTask):
-    seed_data_format = SeedDataFormat.SYNTHETIC
+    seed_data_format = DatasetFormat.SYNTHETIC
     seed_data_location = "seed_data_files/domain_specific_tasks.csv"
 
     output_dataset_name = "synthetic-toolformer-dpo"
@@ -215,7 +218,7 @@ class Toolformer(DPOTask):
 
 
 class SyntheticToolCalls(DPOTask):
-    seed_data_format = SeedDataFormat.TSV
+    seed_data_format = DatasetFormat.TSV
     seed_data_location = "data/domain_specific_tasks.csv"
 
     dataset_org = "roborovski"
@@ -367,7 +370,7 @@ class SquadExtractiveQA(BaseTask):
     - Save the original JSON struct and the dropout JSON struct.
     """
 
-    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_format = DatasetFormat.HF_DATASET
     seed_data_location = "rajpurkar/squad_v2"
     output_dataset_name = "squad-extractive-qa"
     output_dataset_org = "roborovski"
@@ -435,7 +438,7 @@ class DollyEntityExtraction(SquadExtractiveQA):
 
 
 class Goody2(BaseTask):
-    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_format = DatasetFormat.HF_DATASET
     seed_data_location = "yahma/alpaca-cleaned"
     dataset_columns = ["instruction", "response"]
     output_dataset_name = "open-goody2"
@@ -464,7 +467,7 @@ class HumanEval(DPOTask):
         super().__init__(console)
         self.n_completions_per_sample = 4
 
-    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_format = DatasetFormat.HF_DATASET
     seed_data_location = "openai/openai_humaneval"
     seed_data_split = "test"
     output_dataset_name = "humaneval-dpo"
@@ -520,12 +523,20 @@ class HumanEval(DPOTask):
         return res
 
 
+class PositiveMode(Enum):
+    # Generate N completions
+    BEST_OF_N = "best_of_n"
+    # Use the reference completion from codecontests
+    REFERENCE_COMPLETION = "reference_completion"
+
+
 class CodeContests(HumanEval):
 
-    seed_data_format = SeedDataFormat.HF_DATASET
+    seed_data_format = DatasetFormat.HF_DATASET
     seed_data_location = "roborovski/codeforces_problems_subset"
     seed_data_split = "train"
-    output_dataset_name = "codecontests-dpo"
+    output_dataset_name = "codecontests_dpo_v2"
+    output_dataset_format = DatasetFormat.PARQUET
 
     dataset_columns = ["chosen", "rejected", "name", "prompt"]
 
@@ -546,10 +557,11 @@ class CodeContests(HumanEval):
         ),
     ]
 
-    def __init__(self, console) -> None:
+    def __init__(self, console: Console) -> None:
         super().__init__(console)
         self.n_completions_per_sample = 4
         self.print_definitions = False
+        self.positive_completion_mode = PositiveMode.REFERENCE_COMPLETION
 
     def format_inference_conversation(
         self, sample: Dict, eval_task: Optional[EvalTask] = None
@@ -570,9 +582,7 @@ class CodeContests(HumanEval):
                 raise ValueError(
                     f"Invalid code task format: {eval_task.code_task_format}"
                 )
-            return format_codecontests_generation_prompt(
-                problem.prompt, fn_name
-            )
+            return format_codecontests_generation_prompt(problem.prompt, fn_name)
         return format_codecontests_generation_prompt(sample["description"], None)
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
@@ -612,61 +622,28 @@ class CodeContests(HumanEval):
                     )
                 completion = code_snippets[0]
                 print_code_snippet(completion, self.console)
-                test_results_for_completion = []
-                for test_input, expected_test_output in zip(
-                    problem.public_tests["input"], problem.public_tests["output"]
-                ):
-                    expected_test_output: List[str] = expected_test_output.strip().split("\n")  # type: ignore
-                    err, execution_output = evaluate_python_code_exec(
-                        completion, test_input
+                if self.positive_completion_mode == PositiveMode.BEST_OF_N:
+                    test_results_for_completion = evaluate_sample_against_unit_tests(
+                        completion,
+                        problem.public_tests["input"],
+                        problem.public_tests["output"],
                     )
+                    flattened_tests = flatten_list(test_results_for_completion)
+                    n_tests_passed = sum(flattened_tests)
                     logger.info(
-                        f"Test output for completion {j}: {execution_output}, expected: {expected_test_output}"
+                        f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
                     )
-                    if err is not None:
-                        logger.info(
-                            f"Error in test case execution - error: {err}, results: {execution_output}"
-                        )
-                        test_results_for_completion.append(
-                            [False] * len(expected_test_output)
-                        )
-                        continue
-
-                    if not isinstance(execution_output, list):
-                        logger.info(
-                            f"Expected list of outputs, got: {type(execution_output)}"
-                        )
-                        test_results_for_completion.append(
-                            [False] * len(expected_test_output)
-                        )
-                        continue
-                    elif len(execution_output) != len(expected_test_output):
-                        logger.info(
-                            f"Length of execution outputs does not match no. of test cases: expected {len(expected_test_output)}, actual: {len(execution_output)}"
-                        )
-                        test_results_for_completion.append(
-                            [False] * len(expected_test_output)
-                        )
-                        continue
-                    else:
-                        test_case_results = []
-                        for expected, actual in zip(
-                            expected_test_output, execution_output
-                        ):
-                            test_case_results.append(str(expected) == str(actual))
-                        test_results_for_completion.append(test_case_results)
-
-                flattened_tests = flatten_list(test_results_for_completion)
-                n_tests_passed = sum(flattened_tests)
-                logger.info(
-                    f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
-                )
-                if n_tests_passed > best_score:
-                    best_score = n_tests_passed
-                    best_completion = completion
-                if n_tests_passed < worst_score:
-                    worst_score = n_tests_passed
+                    if n_tests_passed > best_score:
+                        best_score = n_tests_passed
+                        best_completion = completion
+                    if n_tests_passed < worst_score:
+                        worst_score = n_tests_passed
+                        worst_completion = completion
+                elif self.positive_completion_mode == PositiveMode.REFERENCE_COMPLETION:
+                    best_completion = problem.source
                     worst_completion = completion
+                    best_score = 1
+                    worst_score = 0
             if best_completion is None or worst_completion is None:
                 logger.warning(
                     f"Could not find best or worst completion for problem {i}, scores: {best_score}, {worst_score}"
@@ -685,7 +662,6 @@ class CodeContests(HumanEval):
                     "rejected": worst_completion,
                     "rejected_score": worst_score,
                     "name": problem.name,
-                    "error": err,
                     "description": problem.description,
                 }
             )
