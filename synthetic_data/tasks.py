@@ -532,8 +532,8 @@ class PositiveMode(Enum):
 
 class CodeContests(HumanEval):
 
-    seed_data_format = DatasetFormat.HF_DATASET
-    seed_data_location = "roborovski/codeforces_problems_subset"
+    seed_data_format = DatasetFormat.PARQUET
+    seed_data_location = "dataset_samples/codeforces_problems_subset.parquet"
     seed_data_split = "train"
     output_dataset_name = "codecontests_dpo_v2"
     output_dataset_format = DatasetFormat.PARQUET
@@ -642,21 +642,21 @@ class CodeContests(HumanEval):
                     if n_tests_passed < worst_score:
                         worst_score = n_tests_passed
                         worst_completion = completion
+                    if best_completion is None or worst_completion is None:
+                        logger.warning(
+                            f"Could not find best or worst completion for problem {i}, scores: {best_score}, {worst_score}"
+                        )
+                        continue
+                    if best_score == worst_score:
+                        logger.warning(
+                            f"Best and worst completions have the same score for problem {i}: {best_score}"
+                        )
+                        continue
                 elif self.positive_completion_mode == PositiveMode.REFERENCE_COMPLETION:
-                    best_completion = problem.source
+                    best_completion = problem.solution
                     worst_completion = completion
                     best_score = 1
                     worst_score = 0
-            if best_completion is None or worst_completion is None:
-                logger.warning(
-                    f"Could not find best or worst completion for problem {i}, scores: {best_score}, {worst_score}"
-                )
-                continue
-            if best_score == worst_score:
-                logger.warning(
-                    f"Best and worst completions have the same score for problem {i}: {best_score}"
-                )
-                continue
             if self.positive_completion_mode == PositiveMode.BEST_OF_N:
                 logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
             res.append(
