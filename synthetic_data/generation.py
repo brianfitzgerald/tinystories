@@ -254,9 +254,16 @@ class GeminiWrapper(GenerationWrapper):
                     contents=conv,  # type: ignore
                 )
             )
-        results: List[google.genai.types.GenerateContentResponse] = (
-            await gather_with_concurrency_limit(4, *reqs)
-        )
+        try:
+            results: List[google.genai.types.GenerateContentResponse] = (
+                await gather_with_concurrency_limit(4, *reqs)
+            )
+        except Exception as e:
+            logger.error(f"Error while generating: {e}")
+            return []
+        for r in results:
+            if r.text is None:
+                logger.error(f"Null text for: {r}")
         return [result.text for result in results]
 
 

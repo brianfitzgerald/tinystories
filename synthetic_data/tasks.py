@@ -559,7 +559,7 @@ class CodeContests(HumanEval):
 
     def __init__(self, console: Console) -> None:
         super().__init__(console)
-        self.n_completions_per_sample = 4
+        self.n_completions_per_sample = 1
         self.print_definitions = False
         self.positive_completion_mode = PositiveMode.REFERENCE_COMPLETION
 
@@ -612,6 +612,9 @@ class CodeContests(HumanEval):
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
             for j, completion in enumerate(completions_for_sample):
+                if not completion:
+                    logger.error(f"Empty completion for problem {i}")
+                    continue
                 code_snippets = extract_code_block(completion, "python")
                 if len(code_snippets) == 0:
                     logger.error(f"No code snippet found for completion {i}")
@@ -654,7 +657,8 @@ class CodeContests(HumanEval):
                     f"Best and worst completions have the same score for problem {i}: {best_score}"
                 )
                 continue
-            logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
+            if self.positive_completion_mode == PositiveMode.BEST_OF_N:
+                logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
             res.append(
                 {
                     "chosen": best_completion,
