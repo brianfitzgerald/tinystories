@@ -25,7 +25,7 @@
             // "args": ["--wandb"]
         },
         {
-            "name": "Inference - TRL",
+            "name": "Inference Server",
             "type": "debugpy",
             "request": "launch",
             "program": "run_inference.py",
