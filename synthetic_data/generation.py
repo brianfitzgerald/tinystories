@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
-from typing import List, Dict, Mapping, cast
+from typing import Coroutine, List, Dict, Mapping, cast
 from datasets import Dataset, concatenate_datasets
 from anthropic.types.message_param import MessageParam
 from anthropic.types.message import Message
@@ -14,6 +14,8 @@ from synthetic_data.utils import (
     gather_with_concurrency_limit,
 )
 import aiohttp
+import google.genai as genai
+import google.genai.types
 
 
 SHAREGPT_TO_OPENAI_ROLE = {
@@ -219,20 +221,43 @@ class AnthropicGenerationWrapper(GenerationWrapper):
             return []
 
 
-class GeminiWrapper(OpenAIGenerationWrapper):
+GEMINI_ROLE_MAP = {
+    "system": "model",
+    "user": "user",
+    "assistant": "model",
+}
+
+
+def _openai_conversation_to_gemini(conversation: Conversation):
+    return [
+        google.genai.types.Content(
+            role=GEMINI_ROLE_MAP[message["role"]],
+            parts=[google.genai.types.Part(text=message["content"])],  # type: ignore
+        )
+        for message in conversation
+    ]
+
+
+class GeminiWrapper(GenerationWrapper):
     def __init__(self, dotenv) -> None:
         api_key = dotenv.get("GOOGLE_API_KEY")
         if api_key is None:
             raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
-        self.oai_client = AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        self.client = genai.Client(api_key=api_key)
+
+    async def generate(self, conversations: List[Conversation]):
+        reqs = []
+        for conv in [_openai_conversation_to_gemini(c) for c in conversations]:
+            reqs.append(
+                self.client.aio.models.generate_content(
+                    model="gemini-1.5-flash-8b",
+                    contents=conv,  # type: ignore
+                )
+            )
+        results: List[google.genai.types.GenerateContentResponse] = (
+            await gather_with_concurrency_limit(4, *reqs)
         )
-        self.model_name = "gemini-1.5-flash-8b"
-        self.max_concurrent = 4
-        self.n_retries = MAX_RETRIES
-        self.temperature = 0.2
-        self.max_tokens = 8192
+        return [result.text for result in results]
 
 
 class GenerationSource(str, Enum):

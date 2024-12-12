@@ -436,7 +436,7 @@ class CodeContestsProblem:
     private_tests: Dict
     cf_rating: int
     cf_points: float
-    solutions: Optional[List[str]]
+    solutions: Optional[List[str]] = None
 
 
 @dataclass

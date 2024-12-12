@@ -39,6 +39,7 @@ dependencies = [
     "gradio",
     "scipy",
     "pyright>=1.1.390",
+    "google-genai>=0.2.0",
 ]
 
 [project.optional-dependencies]

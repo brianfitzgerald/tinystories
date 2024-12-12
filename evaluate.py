@@ -48,7 +48,7 @@ def _save_eval_results_to_csv(eval_results: List[EvalResult], out_dir: str):
 async def main(
     batch_size: int = 1,
     task_name: str = "codecontests",
-    gen_source: str = GenerationSource.LOCAL.value,
+    gen_source: str = GenerationSource.GEMINI.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)
