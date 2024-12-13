@@ -40,10 +40,7 @@ dependencies = [
     "scipy",
     "pyright>=1.1.390",
     "google-genai>=0.2.0",
-]
-
-[project.optional-dependencies]
-torch_deps = [
+    # pytorch deps
     "transformers==4.46.2",
     "torch==2.5.1+cu121",
     "torchaudio==2.5.1+cu121",

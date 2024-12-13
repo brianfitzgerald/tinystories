@@ -250,7 +250,8 @@ class UltraFeedbackDataModule(SmDataset):
             self.val_dataset = self.filtered_logprobs_dataset["test"]
         else:
             # Load dataset and split
-            dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
+            # dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
+            dataset = Dataset.from_parquet("codecontests_dpo_v2.parquet")
             logger.info(f"Loaded dataset with {len(dataset)} samples")
             if self.max_samples:
                 dataset = dataset.select(range(self.max_samples))  # type: ignore
