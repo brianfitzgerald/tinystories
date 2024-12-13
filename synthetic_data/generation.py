@@ -8,6 +8,8 @@ from anthropic.types.message import Message
 from anthropic import AsyncAnthropic, AnthropicError
 from loguru import logger
 from enum import Enum
+
+from wrapt_timeout_decorator import timeout
 from synthetic_data.utils import (
     Conversation,
     DatasetFormat,
@@ -128,6 +130,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         self.temperature = 0.2
         self.max_tokens = 4096
 
+    @timeout(30)
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         self.n_retries = MAX_RETRIES
         while True:
@@ -245,6 +248,7 @@ class GeminiWrapper(GenerationWrapper):
             raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
         self.client = genai.Client(api_key=api_key)
 
+    @timeout(30)
     async def generate(self, conversations: List[Conversation]):
         reqs = []
         for conv in [_openai_conversation_to_gemini(c) for c in conversations]:
