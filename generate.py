@@ -33,7 +33,7 @@ def main(
     batch_size: int = 4,
     restart: bool = False,
     resume_input_position: bool = True,
-    model: str = GenerationSource.GEMINI.value,
+    model: str = GenerationSource.OPENAI.value,
     task_name: str = "codecontests",
     n_epochs: int = 5,
     **kwargs,

@@ -477,8 +477,9 @@ def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
 
 def evaluate_sample_against_unit_tests(
     completion: str, test_inputs: List[str], test_outputs: List[str]
-):
+) -> Tuple[List[List[str]], List[bool]]:
     test_results_for_completion = []
+    test_case_has_errors = []
     for test_input, expected_output_str in zip(test_inputs, test_outputs):
         expected_output = expected_output_str.strip().split("\n")
         err, execution_output = evaluate_python_code_exec(completion, test_input)
@@ -490,6 +491,7 @@ def evaluate_sample_against_unit_tests(
                 f"Error in test case execution - error: {err}, results: {execution_output}"
             )
             test_results_for_completion.append([False] * len(expected_output))
+            test_case_has_errors.append(True)
             continue
         if not isinstance(execution_output, list):
             logger.info(f"Expected list of outputs, got: {type(execution_output)}")
@@ -506,4 +508,5 @@ def evaluate_sample_against_unit_tests(
             for expected, actual in zip(expected_output, execution_output):
                 test_case_results.append(str(expected) == str(actual))
             test_results_for_completion.append(test_case_results)
-    return test_results_for_completion
+        test_case_has_errors.append(False)
+    return test_results_for_completion, test_case_has_errors

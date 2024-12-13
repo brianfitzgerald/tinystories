@@ -625,17 +625,17 @@ class CodeContests(HumanEval):
                     )
                 completion = code_snippets[0]
                 print_code_snippet(completion, self.console)
+                test_results_for_completion, test_results_have_errors = evaluate_sample_against_unit_tests(
+                    completion,
+                    problem.public_tests["input"],
+                    problem.public_tests["output"],
+                )
+                flattened_tests = flatten_list(test_results_for_completion)
+                n_tests_passed = sum(flattened_tests)
+                logger.info(
+                    f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
+                )
                 if self.positive_completion_mode == PositiveMode.BEST_OF_N:
-                    test_results_for_completion = evaluate_sample_against_unit_tests(
-                        completion,
-                        problem.public_tests["input"],
-                        problem.public_tests["output"],
-                    )
-                    flattened_tests = flatten_list(test_results_for_completion)
-                    n_tests_passed = sum(flattened_tests)
-                    logger.info(
-                        f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
-                    )
                     if n_tests_passed > best_score:
                         best_score = n_tests_passed
                         best_completion = completion
@@ -653,6 +653,11 @@ class CodeContests(HumanEval):
                         )
                         continue
                 elif self.positive_completion_mode == PositiveMode.REFERENCE_COMPLETION:
+                    if any(test_results_have_errors):
+                        logger.warning(
+                            f"Errors in tests for completion {j}, skipping..."
+                        )
+                        continue
                     best_completion = problem.solution
                     worst_completion = completion
                     best_score = 1
