@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from abc import ABC
 from loguru import logger
 import re
+import signal
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
 from synthetic_data.utils import extract_code_block
@@ -272,7 +273,8 @@ def evaluate_sample_exec(
         out_io = io.StringIO()
         with redirect_stdout(out_io):
             with redirect_stderr(out_io):
-                exec(code_to_run, full_globals)
+                with time_limit(2):
+                    exec(code_to_run, full_globals)
         output_values = out_io.getvalue().strip().split("\n")
         try:
             output_values = [ast.literal_eval(val) for val in output_values]
@@ -477,6 +479,17 @@ def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
         test=test_code,
         entry_point=sample.code,
     )
+
+@contextlib.contextmanager
+def time_limit(seconds: float):
+    def signal_handler(signum, frame):
+        raise TimeoutError("Timed out!")
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    signal.signal(signal.SIGALRM, signal_handler)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 @timeout(5)
