@@ -191,11 +191,14 @@ ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
 ]
 
 
-def evaluate_sample_ast(full_code: str, n_asserts: int) -> Tuple[Optional[str], List]:
+def evaluate_sample_ast(
+    full_code: str, n_asserts: int
+) -> Tuple[Optional[str], List]:
     """
-    Evaluate a code snippet against a set of tests.
+    Evaluate a code snippet via the AST interpreter.
     Returns an error message and a list of test results.
     """
+
     try:
         allowed_fns = {**ALLOWED_FN_DICT}
         fn_out = evaluate_python_code_ast(
@@ -239,19 +242,19 @@ class redirect_stdin(contextlib._RedirectStream):  # type: ignore
 
 
 @timeout(2)
-def evaluate_python_code_exec(
-    code_to_run: str, test_inputs: str
-) -> Tuple[Optional[str], Any]:
+def evaluate_sample_exec(
+    code_to_run: str, inputs_list: List[str]
+) -> Tuple[Optional[str], Optional[List]]:
+    """
+    Evaluate generated code with a list of inputs and outputs.
+    The code is run with multiple inputs, each being used when the code calls `input()`.
+    """
 
     inputs_idx = 0
-    input_values = []
-
-    test_inputs_list = test_inputs.strip().split("\n")
-    input_values = test_inputs_list
 
     def _retrieve_input(value=None):
         nonlocal inputs_idx
-        out = input_values[inputs_idx]
+        out = inputs_list[inputs_idx]
         inputs_idx += 1
         return out
 
@@ -310,7 +313,7 @@ def _print_test_results(err: Optional[str], results: List[bool], console: Consol
 
 
 # Whether to evaluate via AST interpereter or exec() function
-CodeEvalType = Literal["ast", "exec"]
+CodeExecutionMode = Literal["ast", "exec"]
 # Format to use for prompting and dataset style
 CodeTaskFormat = Literal["humaneval", "mbpp"]
 
@@ -320,7 +323,7 @@ class EvalTask(ABC):
     name: str
     dataset_uri: str
     code_task_format: Optional[CodeTaskFormat]
-    code_eval_type: Optional[CodeEvalType]
+    code_execution_mode: Optional[CodeExecutionMode]
     eval_split: str = "test"
 
 
@@ -337,10 +340,10 @@ class EvalResult:
 
 
 def evaluate_codecontests(
-    console: Console, results: list[tuple[str, dict]], eval_task: EvalTask
+    console: Console, generation_results: list[tuple[str, dict]], eval_task: EvalTask
 ) -> List[EvalResult]:
     results_batch: List[EvalResult] = []
-    for result, sample_dict in results:
+    for result, sample_dict in generation_results:
         for generated in result:
             full_code = generated
             code_snippets = extract_code_block(generated, "python")
@@ -355,16 +358,17 @@ def evaluate_codecontests(
                 sample = _convert_mbpp_to_humaneval(mbpp_problem)
                 tests, n_asserts = assertions_to_tests(sample.test, sample.entry_point)
                 n_asserts = len(mbpp_problem.test_list)
-                full_code = generated_code + "\n" + tests + "\ncheck()"
             elif eval_task.code_task_format == "humaneval":
                 sample = HumanEvalProblem(**sample_dict)
                 tests, n_asserts = assertions_to_tests(sample.test, sample.entry_point)
-                full_code = generated_code + "\n" + tests + "\ncheck()"
+            full_code = generated_code + "\n" + tests + "\ncheck()"
             console.print(f"Evaluating sample: {sample.task_id}")
             console.print(f"Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
             prompt = "" if sample.prompt == "text" else sample.prompt
-            exec_err, evaluation_results = evaluate_sample_ast(full_code, n_asserts)
+            exec_err, evaluation_results = evaluate_sample_ast(
+                full_code, n_asserts
+            )
             console.print(f"Generated solution:")
             print_code_snippet(generated_code, console)
             console.print(f"Test code:")
@@ -475,14 +479,29 @@ def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
     )
 
 
-def evaluate_sample_against_unit_tests(
-    completion: str, test_inputs: List[str], test_outputs: List[str]
+@timeout(5)
+def evaluate_sample_against_codecontests_tests(
+    completion: str,
+    test_inputs: List[str],
+    test_outputs: List[str],
+    execution_mode: CodeExecutionMode,
 ) -> Tuple[List[List[str]], List[bool]]:
+    """
+    Evaluate a code snippet against a list of test inputs and outputs.
+    Used for synthetic evaluation.
+    """
     test_results_for_completion = []
     test_case_has_errors = []
     for test_input, expected_output_str in zip(test_inputs, test_outputs):
         expected_output = expected_output_str.strip().split("\n")
-        err, execution_output = evaluate_python_code_exec(completion, test_input)
+        inputs_list = test_input.strip().split("\n")
+        if execution_mode == "exec":
+            err, execution_output = evaluate_sample_exec(completion, inputs_list)
+        elif execution_mode == "ast":
+            full_code = completion + "\n" + test_input
+            err, execution_output = evaluate_sample_ast(
+                full_code, len(expected_output)
+            )
         logger.info(
             f"Test output for completion: {execution_output}, expected: {expected_output}"
         )

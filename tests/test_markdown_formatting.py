@@ -1,4 +1,4 @@
-from evaluation.code_execution import EvalResult, eval_results_to_markdown
+from evaluation.code_execution import EvalResult, EvalTask, eval_results_to_markdown
 from synthetic_data.utils import ensure_directory
 
 GENERATED_SOLUTION = """
@@ -32,6 +32,8 @@ def test_format_markdown():
         entry_point="filter_by_substring",
         err="",
         tests_pass=[True, True],
+        task_id="function",
+        task=EvalTask("fake", "fake", "humaneval", "ast"),
     )
     out = eval_results_to_markdown([eval_result, eval_result])
     ensure_directory("out")

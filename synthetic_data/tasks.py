@@ -4,8 +4,8 @@ import sys
 import traceback
 from abc import ABC
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional
 from enum import Enum
+from typing import Dict, List, Literal, Optional
 
 from datasets import Dataset
 from loguru import logger
@@ -15,12 +15,12 @@ from rich.markdown import Markdown
 
 from evaluation.code_execution import (
     CodeContestsProblem,
+    CodeExecutionMode,
     EvalTask,
     HumanEvalProblem,
     MBPPProblem,
     _convert_mbpp_to_humaneval,
-    evaluate_python_code_exec,
-    evaluate_sample_against_unit_tests,
+    evaluate_sample_against_codecontests_tests,
     evaluate_sample_ast,
     get_fn_name_from_assert,
     print_code_snippet,
@@ -44,8 +44,8 @@ from synthetic_data.tools import (
 )
 from synthetic_data.utils import (
     Conversation,
-    ExtractiveQARow,
     DatasetFormat,
+    ExtractiveQARow,
     SyntheticToolCallDPORow,
     SyntheticToolCallRow,
     ToolFormerDPORow,
@@ -562,6 +562,7 @@ class CodeContests(HumanEval):
         self.n_completions_per_sample = 1
         self.print_definitions = False
         self.positive_completion_mode = PositiveMode.REFERENCE_COMPLETION
+        self.execution_mode: CodeExecutionMode = "exec"
 
     def format_inference_conversation(
         self, sample: Dict, eval_task: Optional[EvalTask] = None
@@ -625,10 +626,13 @@ class CodeContests(HumanEval):
                     )
                 completion = code_snippets[0]
                 print_code_snippet(completion, self.console)
-                test_results_for_completion, test_results_have_errors = evaluate_sample_against_unit_tests(
-                    completion,
-                    problem.public_tests["input"],
-                    problem.public_tests["output"],
+                test_results_for_completion, test_results_have_errors = (
+                    evaluate_sample_against_codecontests_tests(
+                        completion,
+                        problem.public_tests["input"],
+                        problem.public_tests["output"],
+                        self.execution_mode
+                    )
                 )
                 flattened_tests = flatten_list(test_results_for_completion)
                 n_tests_passed = sum(flattened_tests)
