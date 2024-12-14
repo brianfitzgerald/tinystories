@@ -205,6 +205,12 @@ class CodeContestsDataModule(SmDataset):
             logger.info(f"Max val size set to {max_val_size}")
             self.val_dataset = self.val_dataset[:max_val_size]
 
+    def load_dataset(self):
+        # Load dataset and split
+        dataset = Dataset.from_parquet("codecontests_dpo_v2.parquet").train_test_split(test_size=0.1)  # type: ignore
+        self.train_dataset = dataset["train"]
+        self.val_dataset = dataset["test"]
+
     def process_samples_batch(self, examples: dict):
         # No need to tokenize when using DPOTrainer
 
@@ -236,9 +242,8 @@ class UltraFeedbackDataModule(SmDataset):
         self.use_filtered_logprobs = use_filtered_logprobs
         self.project_dir = project_dir
 
-    def setup(self, stage: Optional[str] = None):
-        logger.info(f"Loading dataset for stage {stage}")
 
+    def load_dataset(self):
         if self.use_filtered_logprobs:
             self.filtered_logprobs_dataset = Dataset.from_parquet(
                 os.path.join(self.project_dir, "filtered_logprobs.parquet")
@@ -249,45 +254,16 @@ class UltraFeedbackDataModule(SmDataset):
             self.train_dataset = self.filtered_logprobs_dataset["train"]
             self.val_dataset = self.filtered_logprobs_dataset["test"]
         else:
+            # TODO offline generate reference logps
+            # TODO filter by p95 length, and compute max length for tokenization
             # Load dataset and split
-            # dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
-            dataset = Dataset.from_parquet("codecontests_dpo_v2.parquet")
+            dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
             logger.info(f"Loaded dataset with {len(dataset)} samples")
             if self.max_samples:
                 dataset = dataset.select(range(self.max_samples))  # type: ignore
             dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
             self.train_dataset = dataset["train"]
             self.val_dataset = dataset["test"]
-
-            ensure_directory(self.cache_dir, clear=False)
-            logger.info(
-                f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
-            )
-
-            self.train_dataset = self.train_dataset.map(
-                self.process_samples_batch,
-                batched=True,
-                load_from_cache_file=self.use_cache,
-                cache_file_name=f"{self.cache_dir}/training.parquet",
-                num_proc=self.num_workers,
-            )
-
-            self.val_dataset = self.val_dataset.map(
-                self.process_samples_batch,
-                batched=True,
-                load_from_cache_file=self.use_cache,
-                cache_file_name=f"{self.cache_dir}/validation.parquet",
-                num_proc=self.num_workers,
-            )
-
-            # TODO offline generate reference logps
-            # TODO filter by p95 length, and compute max length for tokenization
-
-            columns = ["prompt", "rejected", "chosen"]
-
-            # Set format for PyTorch
-            self.train_dataset.set_format(type="torch", columns=columns)
-            self.val_dataset.set_format(type="torch", columns=columns)
 
     def process_samples_batch(self, examples: dict):
         out_dict = {k: [] for k in DPO_COLS_TO_TOKENIZE}

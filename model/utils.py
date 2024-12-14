@@ -85,21 +85,28 @@ class SmDataset(pl.LightningDataModule):
         # self.cpu_count = 1
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
-        self.dataset_name = "roborovski/squad-extractive-qa"
         self.use_cache = use_cache
+        self.dataset_name = "roborovski/squad-extractive-qa"
+        self.train_dataset = None
+        self.val_dataset = None
 
-    def setup(self, stage: Optional[str] = None):
-        logger.info(f"Loading dataset for stage {stage}")
-
+    def load_dataset(self):
         # Load dataset and split
         dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
+    def setup(self, stage: Optional[str] = None):
+        logger.info(f"Loading dataset for stage {stage}")
         ensure_directory(self.cache_dir, clear=False)
         logger.info(
             f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
         )
+
+        self.load_dataset()
+
+        assert self.train_dataset is not None
+        assert self.val_dataset is not None
 
         self.train_dataset = self.train_dataset.map(
             self.process_samples_batch,
