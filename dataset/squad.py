@@ -207,7 +207,7 @@ class CodeContestsDataModule(SmDataset):
 
     def load_dataset(self):
         # Load dataset and split
-        dataset = Dataset.from_parquet("codecontests_dpo_v2.parquet").train_test_split(test_size=0.1)  # type: ignore
+        dataset = Dataset.from_parquet("codecontests_dpo_v2_filtered.parquet").train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 

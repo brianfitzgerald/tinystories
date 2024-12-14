@@ -93,13 +93,6 @@ class CustomDPOTrainer(DPOTrainer):
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
     ) -> EvalLoopOutput:
-        """
-        Overriding built-in evaluation loop to store metrics for each batch.
-        Prediction/evaluation loop, shared by `Trainer.evaluate()` and `Trainer.predict()`.
-
-        Works both with or without labels.
-        """
-        print('custom eval loop')
 
         # Sample and save to game log if requested (for one batch to save time)
         if self.generate_during_eval:

@@ -81,8 +81,8 @@ class SmDataset(pl.LightningDataModule):
         self.batch_size = batch_size
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
-        self.num_workers = min(len(os.sched_getaffinity(0)), 32)
-        # self.cpu_count = 1
+        self.num_workers = min(len(os.sched_getaffinity(0)), 8)
+        self.num_workers = 1
         self.cache_dir = "dataset_caches/default"
         self.input_column, self.target_column = "context", "fields"
         self.use_cache = use_cache
