@@ -19,6 +19,11 @@ from tabulate import tabulate
 
 class CustomDPOTrainer(DPOTrainer):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.eval_samples = []
+
+
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
     ) -> Tuple[str, str]:

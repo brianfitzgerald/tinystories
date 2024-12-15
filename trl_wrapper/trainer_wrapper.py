@@ -50,6 +50,10 @@ class WrapperConfig:
     max_eval_dataset_size: Optional[int] = None
     # adapter to load before training
     adapter_path: Optional[str] = None
+    dpo_beta: float = 0.1
+    learning_rate: float = 1e-5
+    max_grad_norm: float = 0.5
+    lora_rank: int = 256
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -142,8 +146,8 @@ class TrainerWrapper:
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             gradient_checkpointing=False,
             optim="adamw_bnb_8bit",
-            learning_rate=5e-5,
-            max_grad_norm=0.3,
+            learning_rate=self.config.learning_rate,
+            max_grad_norm=self.config.max_grad_norm,
             warmup_ratio=0.1,
             lr_scheduler_type="cosine",
             logging_steps=10,
@@ -156,14 +160,13 @@ class TrainerWrapper:
             tf32=False,
             push_to_hub=False,
             report_to="wandb" if self.use_wandb else "none",
-            # debugger will fail without this
             dataloader_num_workers=n_workers,
-            dataset_num_proc=1,
+            dataset_num_proc=n_workers,
             max_length=self.config.max_seq_length,
             max_prompt_length=self.config.prompt_length,
             precompute_ref_log_probs=True,
             dataloader_pin_memory=True,
-            beta=0.1,
+            beta=self.config.dpo_beta,
             loss_type="sigmoid",
             generate_during_eval=True,
             run_name=random_run_name,
