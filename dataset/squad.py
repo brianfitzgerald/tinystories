@@ -230,7 +230,6 @@ class UltraFeedbackDataModule(SmDataset):
         max_samples: Optional[int] = None,
         use_cache: bool = True,
         use_filtered_logprobs: bool = False,
-        project_dir: str = "",
     ):
         super().__init__(batch_size, tokenizer, max_token_length, use_cache)
 
@@ -240,7 +239,8 @@ class UltraFeedbackDataModule(SmDataset):
         self.max_token_length = max_token_length
         self.max_samples = max_samples
         self.use_filtered_logprobs = use_filtered_logprobs
-        self.project_dir = project_dir
+        # TODO fix
+        self.project_dir = ""
 
 
     def load_dataset(self):

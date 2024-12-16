@@ -51,16 +51,17 @@ class WrapperConfig:
     # adapter to load before training
     adapter_path: Optional[str] = None
     dpo_beta: float = 0.1
-    learning_rate: float = 1e-5
-    max_grad_norm: float = 0.5
+    learning_rate: float = 5e-5
+    max_grad_norm: float = 0.3
     lora_rank: int = 256
 
 
 LLAMA_CONFIG = WrapperConfig(
     model_id_or_path=LLAMA_3_2_1B,
-    max_samples=10000,
+    max_samples=20000,
     using_filtered_logprobs=True,
     n_epochs=10,
+    data_module_choice="ultra_feedback",
 )
 
 
@@ -104,8 +105,7 @@ class TrainerWrapper:
                 self.tokenizer,
                 self.config.max_seq_length,
                 self.config.max_samples,
-                self.config.single_process_mode,
-                self.config.using_filtered_logprobs,
+                self.config.using_filtered_logprobs
             )
         else:
             self.data_module = CodeContestsDataModule(
