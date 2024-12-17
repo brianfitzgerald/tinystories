@@ -15,13 +15,14 @@ from transformers.trainer_utils import EvalLoopOutput
 from transformers import Trainer
 from trl.trainer.utils import pad_to_length
 from tabulate import tabulate
+import pandas as pd
 
 
 class CustomDPOTrainer(DPOTrainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.eval_samples = []
+        self.all_eval_rows = []
 
 
     def generate_from_model_and_ref(
@@ -114,27 +115,50 @@ class CustomDPOTrainer(DPOTrainer):
 
             logger.info("Generating samples...")
             policy_output_decoded, ref_output_decoded = self.generate_from_model_and_ref(self.model, random_batch)  # type: ignore
-            prompts_decoded = self.tokenizer.batch_decode(
+            prompt_decoded = self.tokenizer.batch_decode(
                 random_batch["prompt_input_ids"], skip_special_tokens=True
             )
 
-            rows = [
-                [prompt, pol[len(prompt) :], ref[len(prompt) :]]
-                for prompt, pol, ref in zip(
-                    prompts_decoded, policy_output_decoded, ref_output_decoded
+            chosen_completion_decoded = self.tokenizer.batch_decode(
+                random_batch["chosen_input_ids"], skip_special_tokens=True
+            )
+            rejected_completion_decoded = self.tokenizer.batch_decode(
+                random_batch["rejected_input_ids"], skip_special_tokens=True
+            )
+
+            prefix = len(prompt_decoded)
+
+            new_rows_to_log = []
+
+            for i in range(len(prompt_decoded)):
+                prefix = len(prompt_decoded[i])
+                new_rows_to_log.append(
+                    {
+                        "prompt": prompt_decoded[i][prefix:],
+                        "policy": policy_output_decoded[i][prefix:],
+                        "ref": ref_output_decoded[i][prefix:],
+                        "chosen": chosen_completion_decoded[i][prefix:],
+                        "rejected": rejected_completion_decoded[i][prefix:],
+                    }
                 )
-            ]
 
             # TODO log to tabulate table if not using wandb, and save to txt file
             self.log(
                 {
                     "eval_samples": wandb.Table(
-                        columns=["Prompt", "Policy", "Ref Model"],
-                        rows=rows,
-                    )
+                        columns=["Prompt", "Policy", "Ref", "Chosen", "Rejected"],
+                        rows=new_rows_to_log,
+                    ) # type: ignore
                 }
             )
-            print(tabulate(rows, headers=["Prompt", "Policy", "Ref Model"]))
+
+            self.all_eval_rows.extend(new_rows_to_log)
+
+            all_rows_pd = pd.DataFrame(self.all_eval_rows)
+            all_rows_pd.to_parquet("eval_samples.parquet")
+
+            print(tabulate(new_rows_to_log, headers="keys", tablefmt="simple_grid", maxcolwidths=[40, 40, 40, 40, 40]))
+
             self.state.log_history.pop()
 
         # Base evaluation

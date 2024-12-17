@@ -235,7 +235,6 @@ class UltraFeedbackDataModule(SmDataset):
 
         self.cache_dir = "dataset_caches/ultrafeedback"
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
-        self.num_workers = 12
         self.max_token_length = max_token_length
         self.max_samples = max_samples
         self.use_filtered_logprobs = use_filtered_logprobs

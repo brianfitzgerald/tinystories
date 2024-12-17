@@ -66,7 +66,7 @@ LLAMA_CONFIG = WrapperConfig(
     data_module_choice="ultra_feedback",
 )
 
-MOCK_LLAMA_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=MOCK_LLAMA)
+MOCK_LLAMA_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=SMOL_LM_135M)
 
 
 class TrainerWrapper:
@@ -285,5 +285,5 @@ class TrainerWrapper:
         return metrics
 
     def train(self):
-        logger.info("Training model")
+        logger.info("Starting training.")
         self.trainer.train()

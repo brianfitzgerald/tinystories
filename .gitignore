@@ -198,3 +198,4 @@ notebooks/logs/*
 *.model
 *.txt
 out/
+notebooks/dataset_caches/*
