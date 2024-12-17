@@ -1,9 +1,8 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Optional
+from copy import copy
 
-import fire
-import pandas as pd
 import torch
 from datasets import load_dataset
 from loguru import logger
@@ -15,7 +14,7 @@ from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.utils.quantization_config import BitsAndBytesConfig
-from trl import DPOConfig, DPOTrainer
+from trl import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 
 from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule
@@ -53,7 +52,10 @@ class WrapperConfig:
     dpo_beta: float = 0.1
     learning_rate: float = 5e-5
     max_grad_norm: float = 0.3
-    lora_rank: int = 256
+    # lora config``
+    lora_rank: int = 512
+    lora_dropout: float = 0.2
+    lora_alpha: int = 256
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -63,6 +65,8 @@ LLAMA_CONFIG = WrapperConfig(
     n_epochs=10,
     data_module_choice="ultra_feedback",
 )
+
+MOCK_LLAMA_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=MOCK_LLAMA)
 
 
 class TrainerWrapper:
@@ -105,7 +109,7 @@ class TrainerWrapper:
                 self.tokenizer,
                 self.config.max_seq_length,
                 self.config.max_samples,
-                self.config.using_filtered_logprobs
+                self.config.using_filtered_logprobs,
             )
         else:
             self.data_module = CodeContestsDataModule(
@@ -121,9 +125,9 @@ class TrainerWrapper:
     def init_trainer(self):
 
         peft_config = LoraConfig(
-            lora_alpha=256,
-            lora_dropout=0.05,
-            r=512,
+            lora_alpha=self.config.lora_alpha,
+            lora_dropout=self.config.lora_dropout,
+            r=self.config.lora_rank,
             bias="none",
             target_modules="all-linear",
             task_type="CAUSAL_LM",
