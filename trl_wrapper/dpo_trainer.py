@@ -20,6 +20,10 @@ import pandas as pd
 
 class CustomDPOTrainer(DPOTrainer):
 
+    def set_override_args(self, max_eval_sample_length: int):
+        self.all_eval_rows = []
+        self.max_eval_sample_length = max_eval_sample_length
+
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
     ) -> Tuple[str, str]:
@@ -32,7 +36,10 @@ class CustomDPOTrainer(DPOTrainer):
             if self._peft_has_been_casted_to_bf16
             else nullcontext()
         )
-        generation_config = GenerationConfig(num_beams=1, do_sample=False)
+
+        generation_config = GenerationConfig(
+            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=3
+        )
 
         with generate_context_manager:
             logger.info("Generating policy samples...")
@@ -143,19 +150,23 @@ class CustomDPOTrainer(DPOTrainer):
                     "eval_samples": wandb.Table(
                         columns=["Prompt", "Policy", "Ref", "Chosen", "Rejected"],
                         rows=new_rows_to_log,
-                    ) # type: ignore
+                    )  # type: ignore
                 }
             )
-
-            if not hasattr(self, "all_eval_rows"):
-                self.all_eval_rows = []
 
             self.all_eval_rows.extend(new_rows_to_log)
 
             all_rows_pd = pd.DataFrame(self.all_eval_rows)
             all_rows_pd.to_parquet("eval_samples.parquet")
 
-            print(tabulate(new_rows_to_log, headers="keys", tablefmt="simple_grid", maxcolwidths=[40, 40, 40, 40, 40]))
+            print(
+                tabulate(
+                    new_rows_to_log,
+                    headers="keys",
+                    tablefmt="simple_grid",
+                    maxcolwidths=[40, 40, 40, 40, 40],
+                )
+            )
 
             self.state.log_history.pop()
 
