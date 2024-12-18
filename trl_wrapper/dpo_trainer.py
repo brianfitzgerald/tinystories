@@ -20,9 +20,12 @@ import pandas as pd
 
 class CustomDPOTrainer(DPOTrainer):
 
-    def set_override_args(self, max_eval_sample_length: int):
+    def set_override_args(
+        self, max_eval_sample_length: int, eval_skip_special_tokens: bool
+    ):
         self.all_eval_rows = []
         self.max_eval_sample_length = max_eval_sample_length
+        self.eval_skip_special_tokens = eval_skip_special_tokens
 
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
@@ -42,7 +45,9 @@ class CustomDPOTrainer(DPOTrainer):
         )
 
         with generate_context_manager:
-            logger.info("Generating policy samples...")
+            logger.info(
+                f"Generating policy samples, max length: {self.max_eval_sample_length}..."
+            )
             policy_output = model.generate(
                 input_ids=batch["prompt_input_ids"],
                 attention_mask=batch["prompt_attention_mask"],
@@ -78,14 +83,14 @@ class CustomDPOTrainer(DPOTrainer):
             policy_output, self.max_length, self.processing_class.pad_token_id
         )
         policy_output_decoded = self.processing_class.batch_decode(
-            policy_output, skip_special_tokens=True
+            policy_output, skip_special_tokens=self.eval_skip_special_tokens
         )
 
         ref_output = pad_to_length(
             ref_output, self.max_length, self.processing_class.pad_token_id
         )
         ref_output_decoded = self.processing_class.batch_decode(
-            ref_output, skip_special_tokens=True
+            ref_output, skip_special_tokens=self.eval_skip_special_tokens
         )
 
         return policy_output_decoded, ref_output_decoded
@@ -115,14 +120,17 @@ class CustomDPOTrainer(DPOTrainer):
             logger.info("Generating samples...")
             policy_output_decoded, ref_output_decoded = self.generate_from_model_and_ref(self.model, random_batch)  # type: ignore
             prompt_decoded = self.tokenizer.batch_decode(
-                random_batch["prompt_input_ids"], skip_special_tokens=True
+                random_batch["prompt_input_ids"],
+                skip_special_tokens=self.eval_skip_special_tokens,
             )
 
             chosen_completion_decoded = self.tokenizer.batch_decode(
-                random_batch["chosen_input_ids"], skip_special_tokens=True
+                random_batch["chosen_input_ids"],
+                skip_special_tokens=self.eval_skip_special_tokens,
             )
             rejected_completion_decoded = self.tokenizer.batch_decode(
-                random_batch["rejected_input_ids"], skip_special_tokens=True
+                random_batch["rejected_input_ids"],
+                skip_special_tokens=self.eval_skip_special_tokens,
             )
 
             prefix = len(prompt_decoded)

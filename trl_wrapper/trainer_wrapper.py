@@ -39,7 +39,7 @@ class WrapperConfig:
     # Sequence length to trim completions to
     max_sequence_length: int = 2048
     prompt_length: int = 1024
-    eval_completion_length: int = 512
+    eval_completion_max_length: int = 512
     max_samples: Optional[int] = None
     train_batch_size: int = 4
     eval_batch_size: int = 2
@@ -195,7 +195,7 @@ class TrainerWrapper:
             eval_dataset=self.data_module.val_dataset,
             tokenizer=self.tokenizer,  # type: ignore
         )
-        self.trainer.set_override_args(self.config.eval_completion_length)
+        self.trainer.set_override_args(self.config.eval_completion_max_length, True)
 
         if self.trainer.precompute_ref_log_probs:
             eval_cache_location, train_cache_location = (
