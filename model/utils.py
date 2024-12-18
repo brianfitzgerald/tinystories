@@ -1,17 +1,18 @@
-from typing import List, Literal, Optional, Union, Dict
-from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics.text.bleu import BLEUScore
-from pathlib import Path
-import shutil
-import lightning.pytorch as pl
-from torch.utils.data import DataLoader
-import os
-from dataclasses import dataclass
-from enum import Enum
-from loguru import logger
-from datasets import load_dataset
 import hashlib
+import json
+import os
+import shutil
+from dataclasses import asdict, dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Dict, List, Literal, Optional, Union
 
+import lightning.pytorch as pl
+from datasets import load_dataset
+from loguru import logger
+from torch.utils.data import DataLoader
+from torchmetrics.text.bleu import BLEUScore
+from torchmetrics.text.rouge import ROUGEScore
 from transformers.tokenization_utils import PreTrainedTokenizer
 
 PROMPT_EXPANSION_TASK_PREFIX = "Expand the following prompt to add more detail: "
@@ -213,3 +214,8 @@ def short_hash(input_string: str, truncate_to: int = 8) -> str:
     full_hash = hash_object.hexdigest()
     short_hash = full_hash[:truncate_to]
     return short_hash
+
+
+def save_dataclass_to_json(dataclass_instance, file_path: str):
+    with open(file_path, "w") as file:
+        json.dump(asdict(dataclass_instance), file, indent=4)

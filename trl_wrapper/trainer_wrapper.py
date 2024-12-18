@@ -17,9 +17,9 @@ from trl import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 
 from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule
-from model.utils import ensure_directory, short_hash
+from model.utils import ensure_directory, save_dataclass_to_json, short_hash
 from synthetic_data.utils import dictl
-from trl_wrapper.dpo_trainer import CustomDPOTrainer
+from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
 
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
@@ -35,11 +35,11 @@ DPOTuningModeChoice = Literal["lora", "full"]
 @dataclass
 class WrapperConfig:
     model_id_or_path: str = LLAMA_3_2_1B
-    single_process_mode: bool = False
+    notebook_mode: bool = False
     # Sequence length to trim completions to
     max_sequence_length: int = 2048
     prompt_length: int = 1024
-    eval_completion_max_length: int = 512
+    max_eval_sample_length: int = 1024
     max_samples: Optional[int] = None
     train_batch_size: int = 4
     eval_batch_size: int = 2
@@ -60,6 +60,9 @@ class WrapperConfig:
     lora_alpha: int = 256
     logprob_precompute_batch_size: int = 16
     tuning_mode: DPOTuningModeChoice = "lora"
+    eval_data_mode: EvalDataModeChoice = "random"
+    eval_steps: int = 100
+    save_steps: int = 500
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -118,7 +121,7 @@ class TrainerWrapper:
                 self.config.max_sequence_length,
                 self.config.max_samples,
             )
-        if self.config.single_process_mode:
+        if self.config.notebook_mode:
             self.data_module.num_workers = 1
         self.data_module.setup("fit")
 
@@ -158,17 +161,17 @@ class TrainerWrapper:
             warmup_ratio=0.1,
             lr_scheduler_type="cosine",
             logging_steps=10,
-            save_steps=250,
+            save_steps=self.config.save_steps,
             save_total_limit=2,
             eval_strategy="steps",
             eval_on_start=True,
-            eval_steps=100,
+            eval_steps=self.config.eval_steps,
             bf16=True,
             tf32=False,
             push_to_hub=False,
             report_to="wandb" if self.use_wandb else "none",
-            dataloader_num_workers=0 if self.config.single_process_mode else 4,
-            dataset_num_proc=1 if self.config.single_process_mode else 4,
+            dataloader_num_workers=0 if self.config.notebook_mode else 4,
+            dataset_num_proc=1 if self.config.notebook_mode else 4,
             max_length=self.config.max_sequence_length,
             max_prompt_length=self.config.prompt_length,
             precompute_ref_log_probs=True,
@@ -178,9 +181,12 @@ class TrainerWrapper:
             generate_during_eval=True,
             run_name=random_run_name,
             output_dir=output_dir,
+            disable_tqdm=not self.config.notebook_mode,
         )
 
         ensure_directory(output_dir)
+
+        save_dataclass_to_json(self.config, f"{output_dir}/wrapper_config.json")
 
         model_id_hash = short_hash(self.config.model_id_or_path)
 
@@ -189,7 +195,7 @@ class TrainerWrapper:
         )
 
         logger.info(
-            f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}, logprobs cache: {self.ref_logpbrobs_cache_location} peft config: {peft_config}"
+            f"Initializing DPOtrainer, run: {random_run_name}, project: {self.config.wandb_project_name}, logprobs cache: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}"
         )
 
         self.trainer = CustomDPOTrainer(
@@ -201,7 +207,12 @@ class TrainerWrapper:
             eval_dataset=self.data_module.val_dataset,
             tokenizer=self.tokenizer,  # type: ignore
         )
-        self.trainer.set_custom_args(self.config.eval_completion_max_length, True, output_dir)
+        self.trainer.set_custom_args(
+            self.config.max_eval_sample_length,
+            True,
+            output_dir,
+            self.config.eval_data_mode
+        )
 
         if self.trainer.precompute_ref_log_probs:
             eval_cache_location, train_cache_location = (
@@ -215,6 +226,7 @@ class TrainerWrapper:
                 self.trainer.eval_dataset = load_dataset("parquet", data_files={"train": eval_cache_location})["train"]  # type: ignore
                 self.trainer._precomputed_train_ref_log_probs = True
                 self.trainer._precomputed_eval_ref_log_probs = True
+                logger.info("Loaded.")
             else:
                 # force precomputing of reference logprobs
                 logger.info(

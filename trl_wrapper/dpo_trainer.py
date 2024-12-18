@@ -5,9 +5,9 @@ import random
 from typing import List, Optional
 import wandb
 from loguru import logger
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Literal
 from contextlib import nullcontext
-import torch.amp as amp
+from torch.amp.autocast_mode import autocast
 from transformers.generation.configuration_utils import GenerationConfig
 
 from torch.utils.data import DataLoader
@@ -17,6 +17,7 @@ from trl.trainer.utils import pad_to_length
 from tabulate import tabulate
 import pandas as pd
 
+EvalDataModeChoice = Literal["random", "fixed"]
 
 class CustomDPOTrainer(DPOTrainer):
 
@@ -25,6 +26,7 @@ class CustomDPOTrainer(DPOTrainer):
         max_eval_sample_length: int,
         eval_skip_special_tokens: bool,
         output_dir: str,
+        eval_data_mode: EvalDataModeChoice,
     ):
         """
         Set custom arguments needed for new functionality.
@@ -34,6 +36,7 @@ class CustomDPOTrainer(DPOTrainer):
         self.max_eval_sample_length = max_eval_sample_length
         self.eval_skip_special_tokens = eval_skip_special_tokens
         self.output_dir = output_dir
+        self.eval_data_mode = eval_data_mode
 
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
@@ -43,13 +46,13 @@ class CustomDPOTrainer(DPOTrainer):
         # If one uses `generate_during_eval` with peft + bf16, we need to explicitly call generate with
         # the torch cuda amp context manager as some hidden states are silently casted to full precision.
         generate_context_manager = (
-            amp.autocast("cuda")
+            autocast("cuda")
             if self._peft_has_been_casted_to_bf16
             else nullcontext()
         )
 
         generation_config = GenerationConfig(
-            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=10
+            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=20
         )
 
         with generate_context_manager:
@@ -85,7 +88,7 @@ class CustomDPOTrainer(DPOTrainer):
                         f"Generating reference samples, max length: {self.max_eval_sample_length}..."
                     )
                     assert self.ref_model is not None
-                    ref_output = self.ref_model.generate(
+                    ref_output = self.ref_model.generate( # type: ignore
                         input_ids=batch["prompt_input_ids"],
                         attention_mask=batch["prompt_attention_mask"],
                         pad_token_id=self.processing_class.pad_token_id,
@@ -122,12 +125,16 @@ class CustomDPOTrainer(DPOTrainer):
         if self.generate_during_eval:
             # Generate random indices within the range of the total number of samples
             num_samples = len(dataloader.dataset)  # type: ignore
-            random_indices = random.sample(
-                range(num_samples), k=self.args.eval_batch_size
-            )
+
+            if self.eval_data_mode == "fixed":
+                eval_indices = list(range(self.args.eval_batch_size))
+            else:
+                eval_indices = random.sample(
+                    range(num_samples), k=self.args.eval_batch_size
+                )
 
             # Use dataloader.dataset.select to get the random batch without iterating over the DataLoader
-            random_batch_dataset = dataloader.dataset.select(random_indices)  # type: ignore
+            random_batch_dataset = dataloader.dataset.select(eval_indices)  # type: ignore
             random_batch = self.data_collator(random_batch_dataset)
             random_batch = self._prepare_inputs(random_batch)
 
@@ -196,7 +203,7 @@ class CustomDPOTrainer(DPOTrainer):
                     )
                 )
                 f.write(tabulate_str)
-            
+
             logger.info("Saved eval samples.")
 
             self.state.log_history.pop()
