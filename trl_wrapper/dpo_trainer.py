@@ -17,6 +17,8 @@ from trl.trainer.utils import pad_to_length
 from tabulate import tabulate
 import pandas as pd
 
+from synthetic_data.utils import clean_message
+
 EvalDataModeChoice = Literal["random", "fixed"]
 
 class CustomDPOTrainer(DPOTrainer):
@@ -160,15 +162,15 @@ class CustomDPOTrainer(DPOTrainer):
 
             for i in range(len(prompt_decoded)):
                 prefix = len(prompt_decoded[i])
-                new_rows_to_log.append(
-                    {
-                        "prompt": prompt_decoded[i],
-                        "policy": policy_output_decoded[i][prefix:],
-                        "ref": ref_output_decoded[i][prefix:],
-                        "chosen": chosen_completion_decoded[i],
-                        "rejected": rejected_completion_decoded[i],
-                    }
-                )
+                new_row_dict = {
+                    "prompt": prompt_decoded[i],
+                    "policy": policy_output_decoded[i][prefix:],
+                    "ref": ref_output_decoded[i][prefix:],
+                    "chosen": chosen_completion_decoded[i],
+                    "rejected": rejected_completion_decoded[i],
+                }
+                new_row_dict = {k: clean_message(v) for k, v in new_row_dict.items()}
+                new_rows_to_log.append(new_row_dict)
 
             # TODO log to tabulate table if not using wandb, and save to txt file
             self.log(

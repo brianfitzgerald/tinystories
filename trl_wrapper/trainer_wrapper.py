@@ -84,6 +84,7 @@ DOLPHIN_DPO_CONFIG = WrapperConfig(
     wandb_project_name="dolphin-dpo",
     train_batch_size=12,
     gradient_accumulation_steps=1,
+    logprob_precompute_batch_size=8,
     gradient_checkpointing=True,
     eval_steps=700,
     lora_alpha=128,
