@@ -20,11 +20,6 @@ import pandas as pd
 
 class CustomDPOTrainer(DPOTrainer):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.all_eval_rows = []
-
-
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
     ) -> Tuple[str, str]:
@@ -151,6 +146,9 @@ class CustomDPOTrainer(DPOTrainer):
                     ) # type: ignore
                 }
             )
+
+            if not hasattr(self, "all_eval_rows"):
+                self.all_eval_rows = []
 
             self.all_eval_rows.extend(new_rows_to_log)
 

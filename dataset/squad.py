@@ -229,7 +229,6 @@ class UltraFeedbackDataModule(SmDataset):
         max_token_length: int,
         max_samples: Optional[int] = None,
         use_cache: bool = True,
-        use_filtered_logprobs: bool = False,
     ):
         super().__init__(batch_size, tokenizer, max_token_length, use_cache)
 
@@ -237,32 +236,21 @@ class UltraFeedbackDataModule(SmDataset):
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
         self.max_token_length = max_token_length
         self.max_samples = max_samples
-        self.use_filtered_logprobs = use_filtered_logprobs
         # TODO fix
         self.project_dir = ""
 
 
     def load_dataset(self):
-        if self.use_filtered_logprobs:
-            self.filtered_logprobs_dataset = Dataset.from_parquet(
-                os.path.join(self.project_dir, "filtered_logprobs.parquet")
-            )
-            self.filtered_logprobs_dataset = (
-                self.filtered_logprobs_dataset.train_test_split(test_size=0.1) # type: ignore
-            )  # type: ignore
-            self.train_dataset = self.filtered_logprobs_dataset["train"]
-            self.val_dataset = self.filtered_logprobs_dataset["test"]
-        else:
-            # TODO offline generate reference logps
-            # TODO filter by p95 length, and compute max length for tokenization
-            # Load dataset and split
-            dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
-            logger.info(f"Loaded dataset with {len(dataset)} samples")
-            if self.max_samples:
-                dataset = dataset.select(range(self.max_samples))  # type: ignore
-            dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
-            self.train_dataset = dataset["train"]
-            self.val_dataset = dataset["test"]
+        # TODO offline generate reference logps
+        # TODO filter by p95 length, and compute max length for tokenization
+        # Load dataset and split
+        dataset = load_dataset(self.dataset_name)["train"]  # type: ignore
+        logger.info(f"Loaded dataset with {len(dataset)} samples")
+        if self.max_samples:
+            dataset = dataset.select(range(self.max_samples))  # type: ignore
+        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
+        self.train_dataset = dataset["train"]
+        self.val_dataset = dataset["test"]
 
     def process_samples_batch(self, examples: dict):
         out_dict = {k: [] for k in DPO_COLS_TO_TOKENIZE}

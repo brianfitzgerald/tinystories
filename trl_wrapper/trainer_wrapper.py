@@ -18,6 +18,7 @@ from trl import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 
 from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule
+from model.utils import short_hash
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer
 
@@ -35,13 +36,13 @@ DataModuleChoice = Literal["ultra_feedback", "code_contests"]
 class WrapperConfig:
     model_id_or_path: str = LLAMA_3_2_1B
     single_process_mode: bool = False
-    max_seq_length: int = 1512
+    # Sequence length to trim completions to
+    max_sequence_length: int = 2048
     prompt_length: int = 1024
     max_samples: Optional[int] = None
     train_batch_size: int = 4
     eval_batch_size: int = 2
     gradient_accumulation_steps: int = 1
-    using_filtered_logprobs: bool = False
     root_dir: Optional[str] = None
     data_module_choice: DataModuleChoice = "code_contests"
     wandb_project_name: str = "codecontests-llama-3b"
@@ -56,17 +57,17 @@ class WrapperConfig:
     lora_rank: int = 512
     lora_dropout: float = 0.2
     lora_alpha: int = 256
+    logprob_precompute_batch_size: int = 16
 
 
 LLAMA_CONFIG = WrapperConfig(
     model_id_or_path=LLAMA_3_2_1B,
     max_samples=20000,
-    using_filtered_logprobs=True,
     n_epochs=10,
     data_module_choice="ultra_feedback",
 )
 
-MOCK_LLAMA_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=SMOL_LM_135M)
+SMOL_LM_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=SMOL_LM_135M)
 
 
 class TrainerWrapper:
@@ -90,7 +91,7 @@ class TrainerWrapper:
             device_map="auto",
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
-            quantization_config=bnb_config,
+            # quantization_config=bnb_config,
             ignore_mismatched_sizes=True,
         )
 
@@ -107,16 +108,15 @@ class TrainerWrapper:
             self.data_module = UltraFeedbackDataModule(
                 self.config.train_batch_size,
                 self.tokenizer,
-                self.config.max_seq_length,
+                self.config.max_sequence_length,
                 self.config.max_samples,
-                self.config.using_filtered_logprobs,
             )
         else:
             self.data_module = CodeContestsDataModule(
                 self.config.train_batch_size,
                 self.tokenizer,
-                self.config.max_seq_length,
-                self.config.max_eval_dataset_size,
+                self.config.max_sequence_length,
+                self.config.max_samples,
             )
         if self.config.single_process_mode:
             self.data_module.num_workers = 1
@@ -132,8 +132,6 @@ class TrainerWrapper:
             target_modules="all-linear",
             task_type="CAUSAL_LM",
         )
-
-        n_workers = 0 if self.config.single_process_mode else 4
 
         if self.model is not None and hasattr(self.model, "peft_config"):
             logger.info("LoRA already loaded")
@@ -164,9 +162,9 @@ class TrainerWrapper:
             tf32=False,
             push_to_hub=False,
             report_to="wandb" if self.use_wandb else "none",
-            dataloader_num_workers=n_workers,
-            dataset_num_proc=n_workers,
-            max_length=self.config.max_seq_length,
+            dataloader_num_workers=0 if self.config.single_process_mode else 4,
+            dataset_num_proc=1 if self.config.single_process_mode else 4,
+            max_length=self.config.max_sequence_length,
             max_prompt_length=self.config.prompt_length,
             precompute_ref_log_probs=True,
             dataloader_pin_memory=True,
@@ -177,12 +175,14 @@ class TrainerWrapper:
             output_dir="outputs",
         )
 
+        model_id_hash = short_hash(self.config.model_id_or_path)
+
         self.ref_logpbrobs_cache_location = (
-            f"{self.data_module.cache_dir}/dpo_computed_dataset.parquet"
+            f"{self.data_module.cache_dir}/{model_id_hash}/ref_logprobs_cache"
         )
 
         logger.info(
-            f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}"
+            f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}, logprobs cache: {self.ref_logpbrobs_cache_location}"
         )
 
         self.trainer = CustomDPOTrainer(
@@ -196,17 +196,39 @@ class TrainerWrapper:
         )
 
         if self.trainer.precompute_ref_log_probs:
-            if os.path.exists(self.ref_logpbrobs_cache_location):
+            eval_cache_location, train_cache_location = (
+                f"{self.ref_logpbrobs_cache_location}_eval.parquet",
+                f"{self.ref_logpbrobs_cache_location}_train.parquet",
+            )
+            if os.path.exists(train_cache_location):
                 logger.info("Loading cached logprobs...")
                 # TODO add support for eval dataset
-                self.trainer.train_dataset = load_dataset("parquet", data_files={"train": self.ref_logpbrobs_cache_location})["train"]  # type: ignore
+                self.trainer.train_dataset = load_dataset("parquet", data_files={"train": train_cache_location})["train"]  # type: ignore
+                self.trainer.eval_dataset = load_dataset("parquet", data_files={"train": eval_cache_location})["train"]  # type: ignore
                 self.trainer._precomputed_train_ref_log_probs = True
+                self.trainer._precomputed_eval_ref_log_probs = True
             else:
                 # force precomputing of reference logprobs
-                logger.info("Precomputing reference logprobs...")
+                logger.info(
+                    f"Precomputing reference logprobs, batch size: {self.config.logprob_precompute_batch_size}"
+                )
+                self.trainer.args.per_device_train_batch_size = (
+                    self.config.logprob_precompute_batch_size
+                )
+
+                logger.info("Precomputing train logprobs")
                 self.trainer.get_train_dataloader()
+                logger.info("Precomputing eval logprobs")
+                self.trainer.get_eval_dataloader()
                 logger.info("Saving reference logprobs...")
-                self.trainer.train_dataset.to_parquet(self.ref_logpbrobs_cache_location)
+                assert self.trainer.eval_dataset is not None
+                assert self.trainer.train_dataset is not None
+
+                self.trainer.train_dataset.to_parquet(train_cache_location)
+                self.trainer.eval_dataset.to_parquet(eval_cache_location)
+                self.trainer.args.per_device_train_batch_size = (
+                    self.config.train_batch_size
+                )
 
     def compute_loss_metrics(self, batch_size: int = 1):
         """

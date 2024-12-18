@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from loguru import logger
 from datasets import load_dataset
+import hashlib
 
 from transformers.tokenization_utils import PreTrainedTokenizer
 
@@ -205,3 +206,10 @@ def ensure_directory(directory: str, clear: bool = True):
     if clear:
         shutil.rmtree(directory)
     Path(directory).mkdir(exist_ok=True, parents=True)
+
+
+def short_hash(input_string: str, truncate_to: int = 8) -> str:
+    hash_object = hashlib.sha256(input_string.encode())
+    full_hash = hash_object.hexdigest()
+    short_hash = full_hash[:truncate_to]
+    return short_hash
