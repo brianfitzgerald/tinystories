@@ -1,7 +1,6 @@
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Literal, Optional
-from copy import copy
 
 import torch
 from datasets import load_dataset
@@ -18,7 +17,7 @@ from trl import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 
 from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule
-from model.utils import short_hash
+from model.utils import ensure_directory, short_hash
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer
 
@@ -30,6 +29,7 @@ LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 
 DataModuleChoice = Literal["ultra_feedback", "code_contests"]
+DPOTuningModeChoice = Literal["lora", "full"]
 
 
 @dataclass
@@ -59,6 +59,7 @@ class WrapperConfig:
     lora_dropout: float = 0.2
     lora_alpha: int = 256
     logprob_precompute_batch_size: int = 16
+    tuning_mode: DPOTuningModeChoice = "lora"
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -123,20 +124,25 @@ class TrainerWrapper:
 
     def init_trainer(self):
 
-        peft_config = LoraConfig(
-            lora_alpha=self.config.lora_alpha,
-            lora_dropout=self.config.lora_dropout,
-            r=self.config.lora_rank,
-            bias="none",
-            target_modules="all-linear",
-            task_type="CAUSAL_LM",
-        )
+        peft_config = None
 
-        if self.model is not None and hasattr(self.model, "peft_config"):
-            logger.info("LoRA already loaded")
-            peft_config.target_modules = DUMMY_TARGET_MODULES
+        if self.config.tuning_mode == "lora":
+            peft_config = LoraConfig(
+                lora_alpha=self.config.lora_alpha,
+                lora_dropout=self.config.lora_dropout,
+                r=self.config.lora_rank,
+                bias="none",
+                target_modules="all-linear",
+                task_type="CAUSAL_LM",
+            )
+
+            if self.model is not None and hasattr(self.model, "peft_config"):
+                logger.info("LoRA already loaded, ignoring")
+                peft_config.target_modules = DUMMY_TARGET_MODULES
 
         random_run_name = f"run-{int(torch.rand(1) * 1000000)}"
+
+        output_dir = f"outputs/{random_run_name}"
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 
@@ -171,8 +177,10 @@ class TrainerWrapper:
             loss_type="sigmoid",
             generate_during_eval=True,
             run_name=random_run_name,
-            output_dir="outputs",
+            output_dir=output_dir,
         )
+
+        ensure_directory(output_dir)
 
         model_id_hash = short_hash(self.config.model_id_or_path)
 
@@ -181,7 +189,7 @@ class TrainerWrapper:
         )
 
         logger.info(
-            f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}, logprobs cache: {self.ref_logpbrobs_cache_location}"
+            f"Initializing DPOTrainer, with project name: {self.config.wandb_project_name}, run_name: {random_run_name}, logprobs cache: {self.ref_logpbrobs_cache_location} peft config: {peft_config}"
         )
 
         self.trainer = CustomDPOTrainer(
@@ -193,7 +201,7 @@ class TrainerWrapper:
             eval_dataset=self.data_module.val_dataset,
             tokenizer=self.tokenizer,  # type: ignore
         )
-        self.trainer.set_override_args(self.config.eval_completion_max_length, True)
+        self.trainer.set_custom_args(self.config.eval_completion_max_length, True, output_dir)
 
         if self.trainer.precompute_ref_log_probs:
             eval_cache_location, train_cache_location = (

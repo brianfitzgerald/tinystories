@@ -12,7 +12,7 @@ from transformers.generation.configuration_utils import GenerationConfig
 
 from torch.utils.data import DataLoader
 from transformers.trainer_utils import EvalLoopOutput
-from transformers import Trainer
+from transformers.trainer import Trainer
 from trl.trainer.utils import pad_to_length
 from tabulate import tabulate
 import pandas as pd
@@ -20,12 +20,20 @@ import pandas as pd
 
 class CustomDPOTrainer(DPOTrainer):
 
-    def set_override_args(
-        self, max_eval_sample_length: int, eval_skip_special_tokens: bool
+    def set_custom_args(
+        self,
+        max_eval_sample_length: int,
+        eval_skip_special_tokens: bool,
+        output_dir: str,
     ):
+        """
+        Set custom arguments needed for new functionality.
+        This is so we don't have to modify the __init__ method of the Trainer class.
+        """
         self.all_eval_rows = []
         self.max_eval_sample_length = max_eval_sample_length
         self.eval_skip_special_tokens = eval_skip_special_tokens
+        self.output_dir = output_dir
 
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
@@ -63,7 +71,9 @@ class CustomDPOTrainer(DPOTrainer):
             else:
                 if self.ref_model is None:
                     with self.null_ref_context():
-                        logger.info("Generating reference samples...")
+                        logger.info(
+                            f"Generating reference samples, max length: {self.max_eval_sample_length}..."
+                        )
                         ref_output = self.model.generate(
                             input_ids=batch["prompt_input_ids"],
                             attention_mask=batch["prompt_attention_mask"],
@@ -71,7 +81,10 @@ class CustomDPOTrainer(DPOTrainer):
                             generation_config=generation_config,
                         )
                 else:
-                    logger.info("Generating reference samples...")
+                    logger.info(
+                        f"Generating reference samples, max length: {self.max_eval_sample_length}..."
+                    )
+                    assert self.ref_model is not None
                     ref_output = self.ref_model.generate(
                         input_ids=batch["prompt_input_ids"],
                         attention_mask=batch["prompt_attention_mask"],
@@ -79,6 +92,7 @@ class CustomDPOTrainer(DPOTrainer):
                         generation_config=generation_config,
                     )
 
+        assert self.max_length is not None
         policy_output = pad_to_length(
             policy_output, self.max_length, self.processing_class.pad_token_id
         )
@@ -119,16 +133,16 @@ class CustomDPOTrainer(DPOTrainer):
 
             logger.info("Generating samples...")
             policy_output_decoded, ref_output_decoded = self.generate_from_model_and_ref(self.model, random_batch)  # type: ignore
-            prompt_decoded = self.tokenizer.batch_decode(
+            prompt_decoded = self.processing_class.batch_decode(
                 random_batch["prompt_input_ids"],
                 skip_special_tokens=self.eval_skip_special_tokens,
             )
 
-            chosen_completion_decoded = self.tokenizer.batch_decode(
+            chosen_completion_decoded = self.processing_class.batch_decode(
                 random_batch["chosen_input_ids"],
                 skip_special_tokens=self.eval_skip_special_tokens,
             )
-            rejected_completion_decoded = self.tokenizer.batch_decode(
+            rejected_completion_decoded = self.processing_class.batch_decode(
                 random_batch["rejected_input_ids"],
                 skip_special_tokens=self.eval_skip_special_tokens,
             )
@@ -162,16 +176,28 @@ class CustomDPOTrainer(DPOTrainer):
             self.all_eval_rows.extend(new_rows_to_log)
 
             all_rows_pd = pd.DataFrame(self.all_eval_rows)
-            all_rows_pd.to_parquet("eval_samples.parquet")
+            all_rows_pd.to_parquet(f"{self.output_dir}/eval_samples.parquet")
 
-            print(
-                tabulate(
-                    new_rows_to_log,
-                    headers="keys",
-                    tablefmt="simple_grid",
-                    maxcolwidths=[40, 40, 40, 40, 40],
-                )
+            tabulate_str = tabulate(
+                new_rows_to_log,
+                headers="keys",
+                tablefmt="simple_grid",
+                maxcolwidths=[50] * 5,
             )
+            current_step = self.state.global_step
+            with open(f"{self.output_dir}/eval_samples.txt", "a") as f:
+                f.write("\n" * 2)
+                f.write(
+                    "".join(
+                        ["#" for _ in range(20)]
+                        + [f"Eval samples for step: {current_step}"]
+                        + ["#" for _ in range(20)]
+                        + ["\n" * 2]
+                    )
+                )
+                f.write(tabulate_str)
+            
+            logger.info("Saved eval samples.")
 
             self.state.log_history.pop()
 
