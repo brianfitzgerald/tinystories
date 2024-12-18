@@ -38,7 +38,7 @@ class CustomDPOTrainer(DPOTrainer):
         )
 
         generation_config = GenerationConfig(
-            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=3
+            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=10
         )
 
         with generate_context_manager:
@@ -46,7 +46,6 @@ class CustomDPOTrainer(DPOTrainer):
             policy_output = model.generate(
                 input_ids=batch["prompt_input_ids"],
                 attention_mask=batch["prompt_attention_mask"],
-                max_length=self.max_length,
                 pad_token_id=self.processing_class.pad_token_id,
                 max_time=5,
                 generation_config=generation_config,
@@ -63,7 +62,6 @@ class CustomDPOTrainer(DPOTrainer):
                         ref_output = self.model.generate(
                             input_ids=batch["prompt_input_ids"],
                             attention_mask=batch["prompt_attention_mask"],
-                            max_length=self.max_length,
                             pad_token_id=self.processing_class.pad_token_id,
                             generation_config=generation_config,
                         )
@@ -72,7 +70,6 @@ class CustomDPOTrainer(DPOTrainer):
                     ref_output = self.ref_model.generate(
                         input_ids=batch["prompt_input_ids"],
                         attention_mask=batch["prompt_attention_mask"],
-                        max_length=self.max_length,
                         pad_token_id=self.processing_class.pad_token_id,
                         generation_config=generation_config,
                     )
@@ -136,7 +133,7 @@ class CustomDPOTrainer(DPOTrainer):
                 prefix = len(prompt_decoded[i])
                 new_rows_to_log.append(
                     {
-                        "prompt": prompt_decoded[i][prefix:],
+                        "prompt": prompt_decoded[i],
                         "policy": policy_output_decoded[i][prefix:],
                         "ref": ref_output_decoded[i][prefix:],
                         "chosen": chosen_completion_decoded[i][prefix:],
