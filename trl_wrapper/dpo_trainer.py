@@ -189,9 +189,9 @@ class CustomDPOTrainer(DPOTrainer):
                 f.write("\n" * 2)
                 f.write(
                     "".join(
-                        ["#" for _ in range(20)]
-                        + [f"Eval samples for step: {current_step}"]
-                        + ["#" for _ in range(20)]
+                        ["#" for _ in range(40)]
+                        + [f"  Eval samples for step: {current_step}  "]
+                        + ["#" for _ in range(40)]
                         + ["\n" * 2]
                     )
                 )
