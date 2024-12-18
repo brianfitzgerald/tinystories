@@ -144,8 +144,8 @@ class CustomDPOTrainer(DPOTrainer):
                         "prompt": prompt_decoded[i],
                         "policy": policy_output_decoded[i][prefix:],
                         "ref": ref_output_decoded[i][prefix:],
-                        "chosen": chosen_completion_decoded[i][prefix:],
-                        "rejected": rejected_completion_decoded[i][prefix:],
+                        "chosen": chosen_completion_decoded[i],
+                        "rejected": rejected_completion_decoded[i],
                     }
                 )
 
