@@ -156,8 +156,6 @@ class DollyEntityExtractionDataModule(SmDataset):
         }
 
 
-DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
-
 
 def rec_extract_assistant_messages(messages, index=-1):
     """Recursively extract the last assistant messages from the end of the conversation."""
@@ -169,11 +167,11 @@ def rec_extract_assistant_messages(messages, index=-1):
 
 def create_triplets(
     example,
-    default_system_message=DEFAULT_SYSTEM_MESSAGE,
+    default_system_message: Optional[str] = None,
 ):
     """Create the triplets (prompt, chosen, rejected)"""
     prompt_messages = example["chosen"][:-1]
-    if example["chosen"][0]["role"] != "system":
+    if example["chosen"][0]["role"] != "system" and default_system_message:
         prompt_messages.insert(0, {"role": "system", "content": default_system_message})
     chosen_messages = rec_extract_assistant_messages(example["chosen"])
     rejected_messages = rec_extract_assistant_messages(example["rejected"])
@@ -237,6 +235,7 @@ class UltraFeedbackDataModule(SmDataset):
         self.max_samples = max_samples
         # TODO fix
         self.project_dir = ""
+        self.default_system_message = None
 
 
     def load_dataset(self):
@@ -255,7 +254,7 @@ class UltraFeedbackDataModule(SmDataset):
         out_dict = {k: [] for k in DPO_COLS_TO_TOKENIZE}
         for i in range(len(examples["prompt"])):
             example = {k: v[i] for k, v in examples.items()}
-            triplets = create_triplets(example)
+            triplets = create_triplets(example, self.default_system_message)
             for response_role in DPO_COLS_TO_TOKENIZE:
                 out_dict[response_role].append(triplets[response_role])
         return out_dict

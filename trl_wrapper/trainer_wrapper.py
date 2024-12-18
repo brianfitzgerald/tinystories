@@ -27,12 +27,14 @@ LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
 LLAMA_3_2_3B = "meta-llama/Llama-3.2-3B-Instruct"
 LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
+# NOTE that mistral doesn't allow using system prompts, so it must be set to None.
 MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
 MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
 DataModuleChoice = Literal["ultra_feedback", "code_contests"]
 DPOTuningModeChoice = Literal["lora", "full"]
 
+DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
 
 @dataclass
 class WrapperConfig:
@@ -66,6 +68,8 @@ class WrapperConfig:
     eval_data_mode: EvalDataModeChoice = "random"
     eval_steps: int = 100
     save_steps: int = 500
+    # System message to use if none is supplied. Set to None if using Mistral.
+    default_system_message: Optional[str] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -76,7 +80,7 @@ LLAMA_CONFIG = WrapperConfig(
 )
 
 DOLPHIN_DPO_CONFIG = WrapperConfig(
-    model_id_or_path=MINISTRAL_8B,
+    model_id_or_path=LLAMA_3_2_3B,
     wandb_project_name="dolphin-dpo",
     train_batch_size=12,
     gradient_accumulation_steps=1,
@@ -85,6 +89,7 @@ DOLPHIN_DPO_CONFIG = WrapperConfig(
     lora_alpha=128,
     lora_dropout=0.05,
     lora_rank=256,
+    max_samples=20000,
 )
 
 CONFIGS = {
