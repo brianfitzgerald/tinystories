@@ -156,7 +156,7 @@ class DollyEntityExtractionDataModule(SmDataset):
         }
 
 
-DEFAULT_SYSTEM_MESSAGE = "You are Dolphin, a helpful AI assistant."
+DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
 
 
 def rec_extract_assistant_messages(messages, index=-1):
@@ -169,7 +169,6 @@ def rec_extract_assistant_messages(messages, index=-1):
 
 def create_triplets(
     example,
-    tokenizer: PreTrainedTokenizer,
     default_system_message=DEFAULT_SYSTEM_MESSAGE,
 ):
     """Create the triplets (prompt, chosen, rejected)"""
@@ -256,7 +255,7 @@ class UltraFeedbackDataModule(SmDataset):
         out_dict = {k: [] for k in DPO_COLS_TO_TOKENIZE}
         for i in range(len(examples["prompt"])):
             example = {k: v[i] for k, v in examples.items()}
-            triplets = create_triplets(example, self.tokenizer)
+            triplets = create_triplets(example)
             for response_role in DPO_COLS_TO_TOKENIZE:
                 out_dict[response_role].append(triplets[response_role])
         return out_dict

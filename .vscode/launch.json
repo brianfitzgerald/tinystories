@@ -22,7 +22,7 @@
             "program": "train_trl.py",
             "console": "integratedTerminal",
             "justMyCode": false,
-            // "args": ["--wandb"]
+            "args": ["--notebook_mode"]
         },
         {
             "name": "Inference Server",

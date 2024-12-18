@@ -27,6 +27,8 @@ LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
 LLAMA_3_2_3B = "meta-llama/Llama-3.2-3B-Instruct"
 LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
+MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
+MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
 DataModuleChoice = Literal["ultra_feedback", "code_contests"]
 DPOTuningModeChoice = Literal["lora", "full"]
@@ -44,8 +46,9 @@ class WrapperConfig:
     train_batch_size: int = 4
     eval_batch_size: int = 2
     gradient_accumulation_steps: int = 1
+    gradient_checkpointing: bool = False
     root_dir: Optional[str] = None
-    data_module_choice: DataModuleChoice = "code_contests"
+    data_module_choice: DataModuleChoice = "ultra_feedback"
     wandb_project_name: str = "codecontests-llama-3b"
     n_epochs: int = 1
     max_eval_dataset_size: Optional[int] = None
@@ -72,6 +75,22 @@ LLAMA_CONFIG = WrapperConfig(
     data_module_choice="ultra_feedback",
 )
 
+DOLPHIN_DPO_CONFIG = WrapperConfig(
+    model_id_or_path=MINISTRAL_8B,
+    wandb_project_name="dolphin-dpo",
+    train_batch_size=12,
+    gradient_accumulation_steps=1,
+    gradient_checkpointing=True,
+    eval_steps=700,
+    lora_alpha=128,
+    lora_dropout=0.05,
+    lora_rank=256,
+)
+
+CONFIGS = {
+    "llama": LLAMA_CONFIG,
+    "dolphin": DOLPHIN_DPO_CONFIG,
+}
 
 class TrainerWrapper:
 
@@ -94,7 +113,7 @@ class TrainerWrapper:
             device_map="auto",
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
-            # quantization_config=bnb_config,
+            quantization_config=bnb_config,
             ignore_mismatched_sizes=True,
         )
 
@@ -102,7 +121,7 @@ class TrainerWrapper:
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
         self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
         self.model.resize_token_embeddings(len(self.tokenizer))
-        # self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
 
@@ -154,8 +173,8 @@ class TrainerWrapper:
             per_device_train_batch_size=self.config.train_batch_size,
             per_device_eval_batch_size=self.config.eval_batch_size,
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-            gradient_checkpointing=False,
-            optim="adamw_bnb_8bit",
+            gradient_checkpointing=self.config.gradient_checkpointing,
+            optim="adamw_torch_fused",
             learning_rate=self.config.learning_rate,
             max_grad_norm=self.config.max_grad_norm,
             warmup_ratio=0.1,
@@ -167,7 +186,7 @@ class TrainerWrapper:
             eval_on_start=True,
             eval_steps=self.config.eval_steps,
             bf16=True,
-            tf32=False,
+            tf32=True,
             push_to_hub=False,
             report_to="wandb" if self.use_wandb else "none",
             dataloader_num_workers=0 if self.config.notebook_mode else 4,
@@ -195,8 +214,9 @@ class TrainerWrapper:
         )
 
         logger.info(
-            f"Initializing DPOtrainer, run: {random_run_name}, project: {self.config.wandb_project_name}, logprobs cache: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}"
+            f"Initializing DPOtrainer, run: {random_run_name}, project: {self.config.wandb_project_name}"
         )
+        logger.info(f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}")
 
         self.trainer = CustomDPOTrainer(
             self.model,
