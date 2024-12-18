@@ -68,8 +68,6 @@ LLAMA_CONFIG = WrapperConfig(
     data_module_choice="ultra_feedback",
 )
 
-SMOL_LM_CONFIG = replace(LLAMA_CONFIG, model_id_or_path=SMOL_LM_135M)
-
 
 class TrainerWrapper:
 
