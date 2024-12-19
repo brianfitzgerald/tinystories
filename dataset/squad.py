@@ -1,23 +1,24 @@
-from typing import Tuple
-from datasets.formatting.formatting import LazyBatch
 import json
-from unidecode import unidecode
+import os
+from typing import Optional, Tuple
+
 import torch
-from torch import Tensor
 import torch.nn.functional as F
-from typing import Optional
-from loguru import logger
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
-import os
-
-from transformers.tokenization_utils import PreTrainedTokenizer
-from synthetic_data.utils import ShareGPTConversation, dictl, ldictl
-from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
-from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+from datasets.formatting.formatting import LazyBatch
+from loguru import logger
+from numpy import percentile
+from torch import Tensor
 from tqdm import tqdm
+from transformers.models.auto.modeling_auto import AutoModelForCausalLM
+from transformers.tokenization_utils import PreTrainedTokenizer
+from unidecode import unidecode
+import lightning.pytorch as pl
 
-from model.utils import SmDataset, IGNORE_TOKEN_INDEX, ensure_directory
+from model.utils import IGNORE_TOKEN_INDEX, SmDataset, ensure_directory
+from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
+from synthetic_data.utils import ShareGPTConversation, dictl, ldictl
 
 
 def format_squad_extractive(sample: dict) -> Tuple[str, str]:
@@ -156,7 +157,6 @@ class DollyEntityExtractionDataModule(SmDataset):
         }
 
 
-
 def rec_extract_assistant_messages(messages, index=-1):
     """Recursively extract the last assistant messages from the end of the conversation."""
     if messages[index]["role"] == "assistant":
@@ -190,7 +190,7 @@ class CodeContestsDataModule(SmDataset):
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
-        max_val_size: Optional[int] = None
+        max_val_size: Optional[int] = None,
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
@@ -211,34 +211,59 @@ class CodeContestsDataModule(SmDataset):
     def process_samples_batch(self, examples: dict):
         # No need to tokenize when using DPOTrainer
 
-        prompts = [f"{example['name']}\n{example['description']}" for example in dictl(examples)]
+        prompts = [
+            f"{example['name']}\n{example['description']}"
+            for example in dictl(examples)
+        ]
 
-        batch_out = {"chosen": examples["chosen"], "rejected": examples["rejected"], "prompt": prompts}
+        batch_out = {
+            "chosen": examples["chosen"],
+            "rejected": examples["rejected"],
+            "prompt": prompts,
+        }
         return batch_out
 
 
-class UltraFeedbackDataModule(SmDataset):
+class UltraFeedbackDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
         max_samples: Optional[int] = None,
-        use_cache: bool = True,
+        default_system_message: Optional[str] = None,
     ):
-        super().__init__(batch_size, tokenizer, max_token_length, use_cache)
-
-        self.cache_dir = "dataset_caches/ultrafeedback"
         self.dataset_name = "argilla/ultrafeedback-binarized-preferences-cleaned"
-        self.max_token_length = max_token_length
         self.max_samples = max_samples
-        # TODO fix
-        self.project_dir = ""
-        self.default_system_message = None
+        self.default_system_message = default_system_message
+        self.num_workers = 1
+        # Not used
+        self.cache_dir = "dataset_caches/ultrafeedback"
 
 
-    def load_dataset(self):
+    def calculate_max_lengths(self, train_dataset: Dataset):
+        prompt_length = int(
+            percentile(
+                [len(self.tokenizer(x)["input_ids"]) for x in train_dataset["prompt"]],
+                95,
+            )
+        )
+        chosen_lengths = percentile(
+            [
+                len(self.tokenizer(x["prompt"] + x["chosen"])["input_ids"])
+                for x in train_dataset
+            ],
+            95,
+        )
+        rejected_lengths = percentile(
+            [
+                len(self.tokenizer(x["prompt"] + x["rejected"])["input_ids"])
+                for x in train_dataset
+            ],
+            95,
+        )
+        max_seq_length = max(chosen_lengths, rejected_lengths)
+        return max_seq_length
+
+    def setup(self, stage: Optional[str] = None):
         # TODO offline generate reference logps
         # TODO filter by p95 length, and compute max length for tokenization
         # Load dataset and split

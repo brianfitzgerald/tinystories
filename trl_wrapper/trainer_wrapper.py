@@ -42,7 +42,7 @@ class WrapperConfig:
     notebook_mode: bool = False
     # Sequence length to trim completions to
     max_sequence_length: int = 2048
-    prompt_length: int = 1024
+    max_prompt_length: int = 1024
     max_eval_sample_length: int = 1024
     max_samples: Optional[int] = None
     train_batch_size: int = 4
@@ -68,8 +68,7 @@ class WrapperConfig:
     eval_data_mode: EvalDataModeChoice = "random"
     eval_steps: int = 100
     save_steps: int = 500
-    # System message to use if none is supplied. Set to None if using Mistral.
-    default_system_message: Optional[str] = None
+    using_mistral: bool = False
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -80,17 +79,20 @@ LLAMA_CONFIG = WrapperConfig(
 )
 
 DOLPHIN_DPO_CONFIG = WrapperConfig(
-    model_id_or_path=LLAMA_3_2_3B,
+    model_id_or_path=MISTRAL_7B,
     wandb_project_name="dolphin-dpo",
-    train_batch_size=2,
+    train_batch_size=12,
     gradient_accumulation_steps=1,
     logprob_precompute_batch_size=8,
-    gradient_checkpointing=False,
+    gradient_checkpointing=True,
     eval_steps=700,
     lora_alpha=128,
     lora_dropout=0.05,
     lora_rank=256,
     max_samples=20000,
+    max_sequence_length=1512,
+    max_prompt_length=1024,
+    using_mistral=True
 )
 
 CONFIGS = {
@@ -106,12 +108,16 @@ class TrainerWrapper:
 
     def init_model(self):
 
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
+        bnb_config = None
+
+        if self.config.tuning_mode == "lora":
+
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
 
         logger.info(f"Loading model {self.config.model_id_or_path}")
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -121,12 +127,13 @@ class TrainerWrapper:
             torch_dtype=torch.bfloat16,
             quantization_config=bnb_config,
             ignore_mismatched_sizes=True,
+            use_cache=not self.config.using_mistral,
         )
 
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id_or_path)  # type: ignore
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
-        self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
-        self.model.resize_token_embeddings(len(self.tokenizer))
+        # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
+        # self.model.resize_token_embeddings(len(self.tokenizer))
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
@@ -134,10 +141,8 @@ class TrainerWrapper:
     def init_data_module(self):
         if self.config.data_module_choice == "ultra_feedback":
             self.data_module = UltraFeedbackDataModule(
-                self.config.train_batch_size,
-                self.tokenizer,
-                self.config.max_sequence_length,
                 self.config.max_samples,
+                DEFAULT_SYSTEM_MESSAGE if not self.config.using_mistral else None
             )
         else:
             self.data_module = CodeContestsDataModule(
@@ -198,8 +203,9 @@ class TrainerWrapper:
             dataloader_num_workers=0 if self.config.notebook_mode else 4,
             dataset_num_proc=1 if self.config.notebook_mode else 4,
             max_length=self.config.max_sequence_length,
-            max_prompt_length=self.config.prompt_length,
-            precompute_ref_log_probs=True,
+            max_prompt_length=self.config.max_prompt_length,
+            precompute_ref_log_probs=not self.config.using_mistral,
+            precompute_ref_batch_size=self.config.logprob_precompute_batch_size,
             dataloader_pin_memory=True,
             beta=self.config.dpo_beta,
             loss_type="sigmoid",
@@ -238,7 +244,8 @@ class TrainerWrapper:
             self.config.max_eval_sample_length,
             True,
             output_dir,
-            self.config.eval_data_mode
+            self.config.eval_data_mode,
+            self.config.using_mistral,
         )
 
         if self.trainer.precompute_ref_log_probs:

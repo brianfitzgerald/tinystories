@@ -21,6 +21,7 @@ from synthetic_data.utils import clean_message
 
 EvalDataModeChoice = Literal["random", "fixed"]
 
+
 class CustomDPOTrainer(DPOTrainer):
 
     def set_custom_args(
@@ -29,6 +30,7 @@ class CustomDPOTrainer(DPOTrainer):
         eval_skip_special_tokens: bool,
         output_dir: str,
         eval_data_mode: EvalDataModeChoice,
+        using_mistral: bool,
     ):
         """
         Set custom arguments needed for new functionality.
@@ -39,6 +41,7 @@ class CustomDPOTrainer(DPOTrainer):
         self.eval_skip_special_tokens = eval_skip_special_tokens
         self.output_dir = output_dir
         self.eval_data_mode = eval_data_mode
+        self.using_mistral = using_mistral
 
     def generate_from_model_and_ref(
         self, model, batch: Dict[str, torch.LongTensor]
@@ -48,13 +51,15 @@ class CustomDPOTrainer(DPOTrainer):
         # If one uses `generate_during_eval` with peft + bf16, we need to explicitly call generate with
         # the torch cuda amp context manager as some hidden states are silently casted to full precision.
         generate_context_manager = (
-            autocast("cuda")
-            if self._peft_has_been_casted_to_bf16
-            else nullcontext()
+            autocast("cuda") if self._peft_has_been_casted_to_bf16 else nullcontext()
         )
 
         generation_config = GenerationConfig(
-            do_sample=False, max_new_tokens=self.max_eval_sample_length, max_time=20
+            do_sample=True,
+            max_new_tokens=self.max_eval_sample_length,
+            max_time=20,
+            # https://github.com/huggingface/trl/issues/1217
+            use_cache=not self.using_mistral,
         )
 
         with generate_context_manager:
@@ -65,7 +70,6 @@ class CustomDPOTrainer(DPOTrainer):
                 input_ids=batch["prompt_input_ids"],
                 attention_mask=batch["prompt_attention_mask"],
                 pad_token_id=self.processing_class.pad_token_id,
-                max_time=5,
                 generation_config=generation_config,
             )
 
@@ -90,7 +94,7 @@ class CustomDPOTrainer(DPOTrainer):
                         f"Generating reference samples, max length: {self.max_eval_sample_length}..."
                     )
                     assert self.ref_model is not None
-                    ref_output = self.ref_model.generate( # type: ignore
+                    ref_output = self.ref_model.generate(  # type: ignore
                         input_ids=batch["prompt_input_ids"],
                         attention_mask=batch["prompt_attention_mask"],
                         pad_token_id=self.processing_class.pad_token_id,
@@ -173,12 +177,15 @@ class CustomDPOTrainer(DPOTrainer):
                 new_row_dict = {k: clean_message(v) for k, v in new_row_dict.items()}
                 new_rows_to_log.append(new_row_dict)
 
+            new_rows_wandb_format = [k.values() for k in new_rows_to_log]
+            wandb_headers = list(new_rows_to_log[0].keys())
+
             # TODO log to tabulate table if not using wandb, and save to txt file
             self.log(
                 {
                     "eval_samples": wandb.Table(
-                        columns=["Prompt", "Policy", "Ref", "Chosen", "Rejected"],
-                        rows=new_rows_to_log,
+                        columns=wandb_headers,
+                        rows=new_rows_wandb_format,
                     )  # type: ignore
                 }
             )
@@ -194,6 +201,7 @@ class CustomDPOTrainer(DPOTrainer):
                 tablefmt="simple_grid",
                 maxcolwidths=[50] * 5,
             )
+            print(tabulate_str)
             current_step = self.state.global_step
             with open(f"{self.output_dir}/eval_samples.txt", "a") as f:
                 f.write("\n" * 2)
