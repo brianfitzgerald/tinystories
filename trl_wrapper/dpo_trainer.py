@@ -142,6 +142,7 @@ class CustomDPOTrainer(DPOTrainer):
 
             logger.info("Generating samples...")
             policy_output_decoded, ref_output_decoded = self.generate_from_model_and_ref(self.model, random_batch)  # type: ignore
+            logger.info("Generated samples.")
             prompt_decoded = self.processing_class.batch_decode(
                 random_batch["prompt_input_ids"],
                 skip_special_tokens=self.eval_skip_special_tokens,

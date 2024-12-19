@@ -82,10 +82,10 @@ LLAMA_CONFIG = WrapperConfig(
 DOLPHIN_DPO_CONFIG = WrapperConfig(
     model_id_or_path=LLAMA_3_2_3B,
     wandb_project_name="dolphin-dpo",
-    train_batch_size=12,
+    train_batch_size=2,
     gradient_accumulation_steps=1,
     logprob_precompute_batch_size=8,
-    gradient_checkpointing=True,
+    gradient_checkpointing=False,
     eval_steps=700,
     lora_alpha=128,
     lora_dropout=0.05,
@@ -192,7 +192,7 @@ class TrainerWrapper:
             eval_on_start=True,
             eval_steps=self.config.eval_steps,
             bf16=True,
-            tf32=True,
+            tf32=False,
             push_to_hub=False,
             report_to="wandb" if self.use_wandb else "none",
             dataloader_num_workers=0 if self.config.notebook_mode else 4,
@@ -223,6 +223,7 @@ class TrainerWrapper:
             f"Initializing DPOtrainer, run: {random_run_name}, project: {self.config.wandb_project_name}"
         )
         logger.info(f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}")
+        logger.info(self.config)
 
         self.trainer = CustomDPOTrainer(
             self.model,
