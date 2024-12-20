@@ -7,7 +7,9 @@ from trl_wrapper.trainer_wrapper import (
 from typing import Optional
 
 
-def main(config: str = "dolphin", notebook_mode: bool = False, wandb: bool = False, comment: Optional[str] = None):
+def main(config: str = "dolphin", notebook_mode: bool = False, wandb: bool = False, comment: Optional[str] = None, **kwargs):
+    assert not kwargs, f"Unknown arguments: {kwargs}"
+    assert config in CONFIGS, f"Unknown config: {config}"
 
     cfg = CONFIGS[config]
     if notebook_mode:

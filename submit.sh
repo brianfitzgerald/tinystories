@@ -14,4 +14,4 @@ export WANDB_BASE_URL=https://api.wandb.ai
 echo "Visible CUDA devices: $CUDA_VISIBLE_DEVICES"
 echo "WANDB base URL: $WANDB_BASE_URL"
 
-python train_trl.py --wandb --config dolphin
+python train_trl.py --wandb --config codecontests

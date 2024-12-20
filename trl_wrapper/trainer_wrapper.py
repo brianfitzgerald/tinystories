@@ -109,7 +109,8 @@ CODECONTESTS_CONFIG = WrapperConfig(
     max_sequence_length=1512,
     max_prompt_length=1024,
     using_mistral=True,
-    data_module_choice="code_contests"
+    data_module_choice="code_contests",
+    n_epochs=10
 )
 
 CONFIGS = {
