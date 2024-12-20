@@ -22,7 +22,7 @@
             "program": "train_trl.py",
             "console": "integratedTerminal",
             "justMyCode": false,
-            "args": ["--notebook_mode"]
+            "args": ["--notebook_mode", "--config", "codecontests"]
         },
         {
             "name": "Inference Server",

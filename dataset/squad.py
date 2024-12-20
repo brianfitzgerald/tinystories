@@ -190,7 +190,7 @@ class CodeContestsDataModule(SmDataset):
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
-        max_val_size: Optional[int] = None,
+        max_samples: Optional[int] = None,
     ):
         super().__init__(batch_size, tokenizer, max_token_length)
 
@@ -198,13 +198,14 @@ class CodeContestsDataModule(SmDataset):
         self.dataset_name = "roborovski/codecontests-dpo"
         self.cpu_count = 1
         self.max_token_length = max_token_length
-        if max_val_size:
-            logger.info(f"Max val size set to {max_val_size}")
-            self.val_dataset = self.val_dataset[:max_val_size]
+        self.max_samples = max_samples
 
     def load_dataset(self):
         # Load dataset and split
-        dataset = Dataset.from_parquet("codecontests_dpo_v2_filtered.parquet").train_test_split(test_size=0.1)  # type: ignore
+        dataset = Dataset.from_parquet("codecontests_dpo_v2_filtered.parquet")
+        if self.max_samples:
+            dataset = dataset.select(range(self.max_samples))  # type: ignore
+        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -238,30 +239,6 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
         # Not used
         self.cache_dir = "dataset_caches/ultrafeedback"
 
-
-    def calculate_max_lengths(self, train_dataset: Dataset):
-        prompt_length = int(
-            percentile(
-                [len(self.tokenizer(x)["input_ids"]) for x in train_dataset["prompt"]],
-                95,
-            )
-        )
-        chosen_lengths = percentile(
-            [
-                len(self.tokenizer(x["prompt"] + x["chosen"])["input_ids"])
-                for x in train_dataset
-            ],
-            95,
-        )
-        rejected_lengths = percentile(
-            [
-                len(self.tokenizer(x["prompt"] + x["rejected"])["input_ids"])
-                for x in train_dataset
-            ],
-            95,
-        )
-        max_seq_length = max(chosen_lengths, rejected_lengths)
-        return max_seq_length
 
     def setup(self, stage: Optional[str] = None):
         # TODO offline generate reference logps

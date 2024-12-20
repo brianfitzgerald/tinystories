@@ -95,9 +95,27 @@ DOLPHIN_DPO_CONFIG = WrapperConfig(
     using_mistral=True
 )
 
+CODECONTESTS_CONFIG = WrapperConfig(
+    model_id_or_path=MINISTRAL_8B,
+    wandb_project_name="codecontests-ministral-8b",
+    train_batch_size=12,
+    gradient_accumulation_steps=1,
+    logprob_precompute_batch_size=8,
+    gradient_checkpointing=True,
+    eval_steps=700,
+    lora_alpha=128,
+    lora_dropout=0.05,
+    lora_rank=256,
+    max_sequence_length=1512,
+    max_prompt_length=1024,
+    using_mistral=True,
+    data_module_choice="code_contests"
+)
+
 CONFIGS = {
     "llama": LLAMA_CONFIG,
     "dolphin": DOLPHIN_DPO_CONFIG,
+    "codecontests": CODECONTESTS_CONFIG,
 }
 
 class TrainerWrapper:
@@ -155,7 +173,7 @@ class TrainerWrapper:
             self.data_module.num_workers = 1
         self.data_module.setup("fit")
 
-    def init_trainer(self):
+    def init_trainer(self, comment: Optional[str] = None):
 
         peft_config = None
 
@@ -173,9 +191,11 @@ class TrainerWrapper:
                 logger.info("LoRA already loaded, ignoring")
                 peft_config.target_modules = DUMMY_TARGET_MODULES
 
-        random_run_name = f"run-{int(torch.rand(1) * 1000000)}"
+        run_name = f"run-{int(torch.rand(1) * 1000000)}"
+        if comment is not None:
+            run_name += f"-{comment}"
 
-        output_dir = f"outputs/{random_run_name}"
+        output_dir = f"outputs/{run_name}"
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 
@@ -210,7 +230,7 @@ class TrainerWrapper:
             beta=self.config.dpo_beta,
             loss_type="sigmoid",
             generate_during_eval=True,
-            run_name=random_run_name,
+            run_name=run_name,
             output_dir=output_dir,
             disable_tqdm=not self.config.notebook_mode,
         )
@@ -226,7 +246,7 @@ class TrainerWrapper:
         )
 
         logger.info(
-            f"Initializing DPOtrainer, run: {random_run_name}, project: {self.config.wandb_project_name}"
+            f"Initializing DPOtrainer, run: {run_name}, project: {self.config.wandb_project_name}"
         )
         logger.info(f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}")
         logger.info(self.config)
