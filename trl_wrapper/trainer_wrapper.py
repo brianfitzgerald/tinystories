@@ -16,7 +16,7 @@ from transformers.utils.quantization_config import BitsAndBytesConfig
 from trl import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 
-from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule
+from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule, EvolCodeAlpacaDataModule
 from model.utils import ensure_directory, save_dataclass_to_json, short_hash
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
@@ -31,10 +31,11 @@ SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
 MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
-DataModuleChoice = Literal["ultra_feedback", "code_contests"]
+DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo"]
 DPOTuningModeChoice = Literal["lora", "full"]
 
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
+
 
 @dataclass
 class WrapperConfig:
@@ -48,7 +49,7 @@ class WrapperConfig:
     train_batch_size: int = 4
     eval_batch_size: int = 2
     gradient_accumulation_steps: int = 1
-    gradient_checkpointing: bool = False
+    gradient_checkpointing: bool = True
     root_dir: Optional[str] = None
     data_module_choice: DataModuleChoice = "ultra_feedback"
     wandb_project_name: str = "codecontests-llama-3b"
@@ -60,13 +61,13 @@ class WrapperConfig:
     learning_rate: float = 5e-5
     max_grad_norm: float = 0.3
     # lora config``
-    lora_rank: int = 512
-    lora_dropout: float = 0.2
-    lora_alpha: int = 256
+    lora_rank: int = 256
+    lora_dropout: float = 0.05
+    lora_alpha: int = 128
     logprob_precompute_batch_size: int = 16
     tuning_mode: DPOTuningModeChoice = "lora"
     eval_data_mode: EvalDataModeChoice = "random"
-    eval_steps: int = 100
+    eval_steps: int = 500
     save_steps: int = 500
     using_mistral: bool = False
 
@@ -82,35 +83,21 @@ DOLPHIN_DPO_CONFIG = WrapperConfig(
     model_id_or_path=MISTRAL_7B,
     wandb_project_name="dolphin-dpo",
     train_batch_size=12,
-    gradient_accumulation_steps=1,
-    logprob_precompute_batch_size=8,
-    gradient_checkpointing=True,
-    eval_steps=700,
-    lora_alpha=128,
-    lora_dropout=0.05,
-    lora_rank=256,
     max_samples=20000,
     max_sequence_length=1512,
     max_prompt_length=1024,
-    using_mistral=True
+    using_mistral=True,
 )
 
 CODECONTESTS_CONFIG = WrapperConfig(
-    model_id_or_path=MINISTRAL_8B,
+    model_id_or_path=MISTRAL_7B,
     wandb_project_name="codecontests-ministral-8b",
     train_batch_size=12,
-    gradient_accumulation_steps=1,
-    logprob_precompute_batch_size=8,
-    gradient_checkpointing=True,
-    eval_steps=700,
-    lora_alpha=128,
-    lora_dropout=0.05,
-    lora_rank=256,
     max_sequence_length=1512,
     max_prompt_length=1024,
+    data_module_choice="evol_codealpaca_dpo",
+    n_epochs=10,
     using_mistral=True,
-    data_module_choice="code_contests",
-    n_epochs=10
 )
 
 CONFIGS = {
@@ -118,6 +105,7 @@ CONFIGS = {
     "dolphin": DOLPHIN_DPO_CONFIG,
     "codecontests": CODECONTESTS_CONFIG,
 }
+
 
 class TrainerWrapper:
 
@@ -161,10 +149,17 @@ class TrainerWrapper:
         if self.config.data_module_choice == "ultra_feedback":
             self.data_module = UltraFeedbackDataModule(
                 self.config.max_samples,
-                DEFAULT_SYSTEM_MESSAGE if not self.config.using_mistral else None
+                DEFAULT_SYSTEM_MESSAGE if not self.config.using_mistral else None,
             )
-        else:
+        elif self.config.data_module_choice == "code_contests":
             self.data_module = CodeContestsDataModule(
+                self.config.train_batch_size,
+                self.tokenizer,
+                self.config.max_sequence_length,
+                self.config.max_samples,
+            )
+        elif self.config.data_module_choice == "evol_codealpaca_dpo":
+            self.data_module = EvolCodeAlpacaDataModule(
                 self.config.train_batch_size,
                 self.tokenizer,
                 self.config.max_sequence_length,
@@ -249,7 +244,9 @@ class TrainerWrapper:
         logger.info(
             f"Initializing DPOtrainer, run: {run_name}, project: {self.config.wandb_project_name}"
         )
-        logger.info(f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}")
+        logger.info(
+            f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}"
+        )
         logger.info(self.config)
 
         self.trainer = CustomDPOTrainer(

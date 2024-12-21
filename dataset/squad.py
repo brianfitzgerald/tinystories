@@ -239,7 +239,6 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
         # Not used
         self.cache_dir = "dataset_caches/ultrafeedback"
 
-
     def setup(self, stage: Optional[str] = None):
         # TODO offline generate reference logps
         # TODO filter by p95 length, and compute max length for tokenization
@@ -260,3 +259,28 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
             for response_role in DPO_COLS_TO_TOKENIZE:
                 out_dict[response_role].append(triplets[response_role])
         return out_dict
+
+
+class EvolCodeAlpacaDataModule(SmDataset):
+
+    def __init__(
+        self,
+        batch_size: int,
+        tokenizer: PreTrainedTokenizer,
+        max_token_length: int,
+        max_samples: Optional[int] = None,
+    ):
+        super().__init__(batch_size, tokenizer, max_token_length)
+
+        self.cache_dir = "dataset_caches/evol-codealpaca-dpo"
+        self.dataset_name = "AlekseyKorshuk/evol-codealpaca-v1-dpo"
+        self.max_token_length = max_token_length
+        self.max_samples = max_samples
+
+    def process_samples_batch(self, examples: dict):
+        batch_out = {
+            "chosen": examples["chosen"],
+            "rejected": examples["rejected"],
+            "prompt": examples["question"],
+        }
+        return batch_out
