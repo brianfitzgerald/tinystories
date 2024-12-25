@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from transformers.generation.configuration_utils import GenerationConfig
 from transformers.generation.streamers import TextIteratorStreamer
 
-from train_trl import LLAMA_CONFIG, TrainerWrapper
+from train_trl import CONFIGS, TrainerWrapper
 from trl_wrapper.trainer_wrapper import WrapperConfig
 from synthetic_data.utils import Conversation
 
@@ -21,7 +21,7 @@ class CompletionRequest(BaseModel):
     max_length: Optional[int] = None
 
 
-def do_inference_api(
+def do_inference_transformers(
     prompts: List[Conversation],
     max_tokens: Optional[int],
     tokenizer,
@@ -53,7 +53,9 @@ def do_inference_api(
             generation_config=generation_config,
         )
     logger.info(f"Decoding response")
-    decoded_responses = tokenizer.decode(generated["sequences"][0][len(batch[0]):], skip_special_tokens=True)
+    decoded_responses = tokenizer.decode(
+        generated["sequences"][0][len(batch[0]) :], skip_special_tokens=True
+    )
     logger.info(f"Decoded responses: {decoded_responses}")
     return decoded_responses
 
@@ -125,12 +127,18 @@ def do_inference_gradio(
     )
 
 
-def main(gradio: bool = False, model_dir="outputs/checkpoint-3080"):
+def main(
+    gradio: bool = False,
+    config_name: str = "llama",
+    adapter_path: str = "outputs/checkpoint-3080",
+):
     app = FastAPI(debug=True)
 
+    config = CONFIGS[config_name]
+
     config = WrapperConfig(
-        model_id_or_path=LLAMA_CONFIG.model_id_or_path,
-        adapter_path="outputs/checkpoint-3080",
+        model_id_or_path=config.model_id_or_path,
+        adapter_path=adapter_path,
     )
     wrapper = TrainerWrapper(config)
     logger.info("Initializing model")
@@ -151,7 +159,7 @@ def main(gradio: bool = False, model_dir="outputs/checkpoint-3080"):
     @app.post("/generate")
     async def generate(request: CompletionRequest):
         try:
-            completions = do_inference_api(
+            completions = do_inference_transformers(
                 request.conversations,
                 request.max_length,
                 tokenizer,
