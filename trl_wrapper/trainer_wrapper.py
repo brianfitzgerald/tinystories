@@ -1,6 +1,6 @@
 import os
-from dataclasses import dataclass
-from typing import Literal, Optional
+from dataclasses import dataclass, replace
+from typing import Literal, Optional, TypeVar
 from datetime import datetime
 
 import torch
@@ -108,10 +108,7 @@ CODECONTESTS_CONFIG = WrapperConfig(
     using_mistral=True,
 )
 
-CODECONTESTS_SFT_CONFIG = WrapperConfig(
-    **CODECONTESTS_CONFIG.__dict__,
-    run_suffix="sft",
-)
+CODECONTESTS_SFT_CONFIG = replace(CODECONTESTS_CONFIG, tuning_mode="sft_lora")
 
 
 CONFIGS = {
