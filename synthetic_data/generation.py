@@ -95,26 +95,6 @@ class LocalGenerator(GenerationWrapper):
                 return completions
 
 
-class VLLMWrapper(GenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
-        from vllm import LLM, SamplingParams  # type: ignore
-
-        self.sampling_params = SamplingParams(
-            temperature=0.7, top_p=0.95, max_tokens=128
-        )
-        logger.info("Loading local pipeline...")
-        self.model = LLM(model="HuggingFaceH4/zephyr-7b-beta", dtype="auto")
-        logger.info("Pipeline loaded.")
-        self.tokenizer = self.model.get_tokenizer()
-
-    async def generate(self, conversations: List[Conversation]) -> List[str]:
-        convs_formatted: str = [self.tokenizer.apply_chat_template(c, tokenize=False) for c in conversations]  # type: ignore
-        responses = self.model.generate(convs_formatted, self.sampling_params)
-        responses_text = [r.outputs[0].text for r in responses]
-        responses_text = [r.replace("<|assistant|>", " ") for r in responses_text]
-        return responses_text
-
-
 MAX_RETRIES = 3
 
 
@@ -169,6 +149,15 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 self.n_retries -= 1
                 if self.n_retries <= 0:
                     raise e
+
+class VLLMWrapper(OpenAIGenerationWrapper):
+    def __init__(self, dotenv: Dict[str, str]):
+        self.oai_client = AsyncOpenAI(
+            base_url="http://localhost:8000/v1",
+        )
+        self.model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+        self.max_concurrent = 4
+        self.temperature = 0.4
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):

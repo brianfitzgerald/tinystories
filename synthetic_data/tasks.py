@@ -548,13 +548,13 @@ class CodeContests(HumanEval):
             "exec",
             "test",
         ),
-        EvalTask(
-            "humaneval",
-            "google-research-datasets/mbpp",
-            "mbpp",
-            "ast",
-            "train",
-        ),
+        # EvalTask(
+        #     "humaneval",
+        #     "google-research-datasets/mbpp",
+        #     "mbpp",
+        #     "ast",
+        #     "train",
+        # ),
     ]
 
     def __init__(self, console: Console) -> None:
@@ -575,9 +575,9 @@ class CodeContests(HumanEval):
                 mbpp_problem = MBPPProblem(**sample)
                 problem = _convert_mbpp_to_humaneval(mbpp_problem)
                 fn_name = get_fn_name_from_assert(mbpp_problem.test_list[0])
-                assert (
-                    fn_name
-                ), f"Could not find function name for problem {mbpp_problem.task_id}"
+                if not fn_name:
+                    logger.error(f"Could not find function name for problem {mbpp_problem.task_id}")
+                    return [{"role": "system", "content": problem.prompt}]
                 problem.entry_point = fn_name
             else:
                 raise ValueError(
