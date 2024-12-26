@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from typing import Literal, Optional
+from datetime import datetime
 
 import torch
 from datasets import load_dataset
@@ -187,7 +188,10 @@ class TrainerWrapper:
                 logger.info("LoRA already loaded, ignoring")
                 peft_config.target_modules = DUMMY_TARGET_MODULES
 
-        run_name = f"run-{int(torch.rand(1) * 1000000)}"
+        
+        simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
+        random_id = int(torch.rand(1) * 1000000)
+        run_name = f"run-{simple_date}-{random_id}"
         if comment is not None:
             run_name += f"-{comment}"
 

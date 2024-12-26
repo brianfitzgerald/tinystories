@@ -3,7 +3,7 @@ export HF_HOME="/weka/home-brianf/huggingface"
 
 set -ex
 
-LORA_DIR=${1:-"outputs/run-248270/checkpoint-2010"}
+LORA_DIR=${1:-"outputs/run-12-26-5-12-514725/checkpoint-6500"}
 CONFIG_PATH="$LORA_DIR/adapter_config.json"
 BASE_MODEL=$(jq -r '.base_model_name_or_path' "$CONFIG_PATH")
 
