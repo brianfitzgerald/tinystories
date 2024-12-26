@@ -1,24 +1,25 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, List, Optional, cast
+
+import aiohttp
+import google.genai as genai
+import google.genai.types
+from anthropic import AnthropicError, AsyncAnthropic
+from anthropic.types.message import Message
+from anthropic.types.message_param import MessageParam
+from datasets import Dataset, concatenate_datasets
+from loguru import logger
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
-from typing import Coroutine, List, Dict, Mapping, cast
-from datasets import Dataset, concatenate_datasets
-from anthropic.types.message_param import MessageParam
-from anthropic.types.message import Message
-from anthropic import AsyncAnthropic, AnthropicError
-from loguru import logger
-from enum import Enum
-
 from wrapt_timeout_decorator import timeout
+
 from synthetic_data.utils import (
     Conversation,
     DatasetFormat,
     gather_with_concurrency_limit,
 )
-import aiohttp
-import google.genai as genai
-import google.genai.types
-
 
 SHAREGPT_TO_OPENAI_ROLE = {
     "system": "system",
@@ -46,10 +47,20 @@ def save_output_dataset(
         raise ValueError(f"Unsupported output format: {format}")
 
 
+@dataclass
+class GenerationWrapperArgs:
+    lora_name: Optional[str] = None
+    dotenv: dict[str, str] = field(default_factory=dict)
+
+
 class GenerationWrapper(ABC):
     """
     Abstract method for various ways of generating data.
     """
+
+    def __init__(self, args: GenerationWrapperArgs) -> None:
+        super().__init__()
+        self.args = args
 
     @abstractmethod
     async def generate(self, conversations: List[Conversation]) -> List[str]:
@@ -63,7 +74,7 @@ def solution(problem_input):
 
 
 class MockGenerator(GenerationWrapper):
-    def __init__(self, _: Dict[str, str]):
+    def __init__(self, _: GenerationWrapperArgs) -> None:
         self.mock_completions = []
 
     def set_mock_completions(self, completions: List[str]) -> None:
@@ -76,8 +87,6 @@ class MockGenerator(GenerationWrapper):
 
 
 class LocalGenerator(GenerationWrapper):
-    def __init__(self, _: Dict[str, str]):
-        pass
 
     async def generate(self, conversations: List[Conversation]) -> List[str]:
         url = "http://0.0.0.0:8080/generate"
@@ -99,8 +108,8 @@ MAX_RETRIES = 3
 
 
 class OpenAIGenerationWrapper(GenerationWrapper):
-    def __init__(self, dotenv: Mapping[str, str]):
-        api_key = dotenv.get("OPENAI_API_KEY")
+    def __init__(self, args: GenerationWrapperArgs) -> None:
+        api_key = args.dotenv.get("OPENAI_API_KEY")
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
         self.oai_client = AsyncOpenAI(api_key=api_key)
@@ -150,8 +159,9 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 if self.n_retries <= 0:
                     raise e
 
+
 class VLLMWrapper(OpenAIGenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
+    def __init__(self, _: GenerationWrapperArgs) -> None:
         self.oai_client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
         )
@@ -161,8 +171,8 @@ class VLLMWrapper(OpenAIGenerationWrapper):
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
-        api_key = dotenv.get("OPENROUTER_API_KEY")
+    def __init__(self, args: GenerationWrapperArgs) -> None:
+        api_key = args.dotenv.get("OPENROUTER_API_KEY")
         if api_key is None:
             raise ValueError(
                 "OPENROUTER_API_KEY is required for OpenRouterGenerationWrapper"
@@ -177,8 +187,8 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
 
 
 class AnthropicGenerationWrapper(GenerationWrapper):
-    def __init__(self, dotenv: Dict[str, str]):
-        api_key = dotenv.get("ANTHROPIC_API_KEY")
+    def __init__(self, args: GenerationWrapperArgs) -> None:
+        api_key = args.dotenv.get("ANTHROPIC_API_KEY")
         if api_key is None:
             raise ValueError(
                 "ANTHROPIC_API_KEY is required for AnthropicGenerationWrapper"
@@ -231,8 +241,8 @@ def _openai_conversation_to_gemini(conversation: Conversation):
 
 
 class GeminiWrapper(GenerationWrapper):
-    def __init__(self, dotenv) -> None:
-        api_key = dotenv.get("GOOGLE_API_KEY")
+    def __init__(self, args: GenerationWrapperArgs) -> None:
+        api_key = args.dotenv.get("GOOGLE_API_KEY")
         if api_key is None:
             raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
         self.client = genai.Client(api_key=api_key)
