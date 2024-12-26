@@ -49,7 +49,7 @@ class WrapperConfig:
     model_id_or_path: str = LLAMA_3_2_1B
     notebook_mode: bool = False
     # Sequence length to trim completions to
-    max_sequence_length: int = 2048
+    max_sequence_length: int = 1512
     max_prompt_length: int = 1024
     max_eval_sample_length: int = 1024
     max_samples: Optional[int] = None
@@ -92,8 +92,6 @@ DOLPHIN_DPO_CONFIG = WrapperConfig(
     wandb_project_name="dolphin-dpo",
     train_batch_size=12,
     max_samples=20000,
-    max_sequence_length=1512,
-    max_prompt_length=1024,
     using_mistral=True,
 )
 
@@ -101,8 +99,6 @@ CODECONTESTS_CONFIG = WrapperConfig(
     model_id_or_path=MISTRAL_7B,
     wandb_project_name="codecontests-ministral-8b",
     train_batch_size=12,
-    max_sequence_length=1512,
-    max_prompt_length=1024,
     data_module_choice="evol_codealpaca_dpo",
     n_epochs=10,
     using_mistral=True,
