@@ -14,10 +14,16 @@ from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.utils.quantization_config import BitsAndBytesConfig
-from trl import DPOConfig
+from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
+from trl.trainer.sft_trainer import SFTTrainer
+from trl.trainer.sft_config import SFTConfig
 
-from dataset.squad import CodeContestsDataModule, UltraFeedbackDataModule, EvolCodeAlpacaDataModule
+from dataset.squad import (
+    CodeContestsDataModule,
+    UltraFeedbackDataModule,
+    EvolCodeAlpacaDataModule,
+)
 from model.utils import ensure_directory, save_dataclass_to_json, short_hash
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
@@ -33,7 +39,7 @@ MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
 MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
 DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo"]
-DPOTuningModeChoice = Literal["lora", "full"]
+TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora"]
 
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
 
@@ -66,11 +72,12 @@ class WrapperConfig:
     lora_dropout: float = 0.05
     lora_alpha: int = 128
     logprob_precompute_batch_size: int = 16
-    tuning_mode: DPOTuningModeChoice = "lora"
+    tuning_mode: TuningModeChoice = "dpo_full"
     eval_data_mode: EvalDataModeChoice = "random"
     eval_steps: int = 500
     save_steps: int = 500
     using_mistral: bool = False
+    run_suffix: Optional[str] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -101,10 +108,17 @@ CODECONTESTS_CONFIG = WrapperConfig(
     using_mistral=True,
 )
 
+CODECONTESTS_SFT_CONFIG = WrapperConfig(
+    **CODECONTESTS_CONFIG.__dict__,
+    run_suffix="sft",
+)
+
+
 CONFIGS = {
     "llama": LLAMA_CONFIG,
     "dolphin": DOLPHIN_DPO_CONFIG,
     "codecontests": CODECONTESTS_CONFIG,
+    "codecontests_sft": CODECONTESTS_SFT_CONFIG,
 }
 
 
@@ -172,23 +186,7 @@ class TrainerWrapper:
 
     def init_trainer(self, comment: Optional[str] = None):
 
-        peft_config = None
-
-        if self.config.tuning_mode == "lora":
-            peft_config = LoraConfig(
-                lora_alpha=self.config.lora_alpha,
-                lora_dropout=self.config.lora_dropout,
-                r=self.config.lora_rank,
-                bias="none",
-                target_modules="all-linear",
-                task_type="CAUSAL_LM",
-            )
-
-            if self.model is not None and hasattr(self.model, "peft_config"):
-                logger.info("LoRA already loaded, ignoring")
-                peft_config.target_modules = DUMMY_TARGET_MODULES
-
-        
+        # Get run name
         simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
         random_id = int(torch.rand(1) * 1000000)
         run_name = f"run-{simple_date}-{random_id}"
@@ -199,112 +197,164 @@ class TrainerWrapper:
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 
-        args = DPOConfig(
-            num_train_epochs=self.config.n_epochs,
-            per_device_train_batch_size=self.config.train_batch_size,
-            per_device_eval_batch_size=self.config.eval_batch_size,
-            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-            gradient_checkpointing=self.config.gradient_checkpointing,
-            optim="adamw_torch_fused",
-            learning_rate=self.config.learning_rate,
-            max_grad_norm=self.config.max_grad_norm,
-            warmup_ratio=0.1,
-            lr_scheduler_type="cosine",
-            logging_steps=10,
-            save_steps=self.config.save_steps,
-            save_total_limit=2,
-            eval_strategy="steps",
-            eval_on_start=True,
-            eval_steps=self.config.eval_steps,
-            bf16=True,
-            tf32=False,
-            push_to_hub=False,
-            report_to="wandb" if self.use_wandb else "none",
-            dataloader_num_workers=0 if self.config.notebook_mode else 4,
-            dataset_num_proc=1 if self.config.notebook_mode else 4,
-            max_length=self.config.max_sequence_length,
-            max_prompt_length=self.config.max_prompt_length,
-            precompute_ref_log_probs=not self.config.using_mistral,
-            precompute_ref_batch_size=self.config.logprob_precompute_batch_size,
-            dataloader_pin_memory=True,
-            beta=self.config.dpo_beta,
-            loss_type="sigmoid",
-            generate_during_eval=True,
-            run_name=run_name,
-            output_dir=output_dir,
-            disable_tqdm=not self.config.notebook_mode,
-        )
+        # LoRA config
+        peft_config = None
+        if self.config.tuning_mode in ("dpo_lora", "sft_lora"):
+            peft_config = LoraConfig(
+                lora_alpha=self.config.lora_alpha,
+                lora_dropout=self.config.lora_dropout,
+                r=self.config.lora_rank,
+                bias="none",
+                target_modules="all-linear",
+                task_type="CAUSAL_LM",
+            )
+            if self.model is not None and hasattr(self.model, "peft_config"):
+                logger.info("LoRA already loaded, ignoring")
+                peft_config.target_modules = DUMMY_TARGET_MODULES
 
         ensure_directory(output_dir)
-
         save_dataclass_to_json(self.config, f"{output_dir}/wrapper_config.json")
-
         model_id_hash = short_hash(self.config.model_id_or_path)
-
         self.ref_logpbrobs_cache_location = (
             f"{self.data_module.cache_dir}/{model_id_hash}/ref_logprobs_cache"
         )
-
         logger.info(
-            f"Initializing DPOtrainer, run: {run_name}, project: {self.config.wandb_project_name}"
+            f"Initializing trainer, run: {run_name}, project: {self.config.wandb_project_name}"
         )
         logger.info(
             f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}"
         )
         logger.info(self.config)
 
-        self.trainer = CustomDPOTrainer(
-            self.model,
-            ref_model=None,  # set to none since we use peft
-            peft_config=peft_config,
-            args=args,
-            train_dataset=self.data_module.train_dataset,
-            eval_dataset=self.data_module.val_dataset,
-            tokenizer=self.tokenizer,  # type: ignore
-        )
-        self.trainer.set_custom_args(
-            self.config.max_eval_sample_length,
-            True,
-            output_dir,
-            self.config.eval_data_mode,
-            self.config.using_mistral,
-        )
-
-        if self.trainer.precompute_ref_log_probs:
-            eval_cache_location, train_cache_location = (
-                f"{self.ref_logpbrobs_cache_location}_eval.parquet",
-                f"{self.ref_logpbrobs_cache_location}_train.parquet",
+        if self.config.tuning_mode == "sft_lora":
+            args = SFTConfig(
+                num_train_epochs=self.config.n_epochs,
+                per_device_train_batch_size=self.config.train_batch_size,
+                per_device_eval_batch_size=self.config.eval_batch_size,
+                gradient_accumulation_steps=self.config.gradient_accumulation_steps,
+                gradient_checkpointing=self.config.gradient_checkpointing,
+                optim="adamw_torch_fused",
+                learning_rate=self.config.learning_rate,
+                max_grad_norm=self.config.max_grad_norm,
+                warmup_ratio=0.1,
+                lr_scheduler_type="cosine",
+                logging_steps=10,
+                save_steps=self.config.save_steps,
+                save_total_limit=2,
+                eval_strategy="steps",
+                eval_on_start=True,
+                eval_steps=self.config.eval_steps,
+                bf16=True,
+                tf32=False,
+                push_to_hub=False,
+                report_to="wandb" if self.use_wandb else "none",
+                dataloader_num_workers=0 if self.config.notebook_mode else 4,
+                dataset_num_proc=1 if self.config.notebook_mode else 4,
+                max_length=self.config.max_sequence_length,
+                max_prompt_length=self.config.max_prompt_length,
+                dataloader_pin_memory=True,
+                generate_during_eval=True,
+                run_name=run_name,
+                output_dir=output_dir,
+                disable_tqdm=not self.config.notebook_mode,
             )
-            if os.path.exists(train_cache_location):
-                logger.info("Loading cached logprobs...")
-                # TODO add support for eval dataset
-                self.trainer.train_dataset = load_dataset("parquet", data_files={"train": train_cache_location})["train"]  # type: ignore
-                self.trainer.eval_dataset = load_dataset("parquet", data_files={"train": eval_cache_location})["train"]  # type: ignore
-                self.trainer._precomputed_train_ref_log_probs = True
-                self.trainer._precomputed_eval_ref_log_probs = True
-                logger.info("Loaded.")
-            else:
-                # force precomputing of reference logprobs
-                logger.info(
-                    f"Precomputing reference logprobs, batch size: {self.config.logprob_precompute_batch_size}"
-                )
-                self.trainer.args.per_device_train_batch_size = (
-                    self.config.logprob_precompute_batch_size
-                )
+            self.trainer = SFTTrainer(
+                self.model,
+                peft_config=peft_config,
+                args=args,
+                train_dataset=self.data_module.train_dataset,
+                eval_dataset=self.data_module.val_dataset,
+                tokenizer=self.tokenizer,  # type: ignore
+            )
+        else:
+            args = DPOConfig(
+                num_train_epochs=self.config.n_epochs,
+                per_device_train_batch_size=self.config.train_batch_size,
+                per_device_eval_batch_size=self.config.eval_batch_size,
+                gradient_accumulation_steps=self.config.gradient_accumulation_steps,
+                gradient_checkpointing=self.config.gradient_checkpointing,
+                optim="adamw_torch_fused",
+                learning_rate=self.config.learning_rate,
+                max_grad_norm=self.config.max_grad_norm,
+                warmup_ratio=0.1,
+                lr_scheduler_type="cosine",
+                logging_steps=10,
+                save_steps=self.config.save_steps,
+                save_total_limit=2,
+                eval_strategy="steps",
+                eval_on_start=True,
+                eval_steps=self.config.eval_steps,
+                bf16=True,
+                tf32=False,
+                push_to_hub=False,
+                report_to="wandb" if self.use_wandb else "none",
+                dataloader_num_workers=0 if self.config.notebook_mode else 4,
+                dataset_num_proc=1 if self.config.notebook_mode else 4,
+                max_length=self.config.max_sequence_length,
+                max_prompt_length=self.config.max_prompt_length,
+                precompute_ref_log_probs=not self.config.using_mistral,
+                precompute_ref_batch_size=self.config.logprob_precompute_batch_size,
+                dataloader_pin_memory=True,
+                beta=self.config.dpo_beta,
+                loss_type="sigmoid",
+                generate_during_eval=True,
+                run_name=run_name,
+                output_dir=output_dir,
+                disable_tqdm=not self.config.notebook_mode,
+            )
 
-                logger.info("Precomputing train logprobs")
-                self.trainer.get_train_dataloader()
-                logger.info("Precomputing eval logprobs")
-                self.trainer.get_eval_dataloader()
-                logger.info("Saving reference logprobs...")
-                assert self.trainer.eval_dataset is not None
-                assert self.trainer.train_dataset is not None
+            self.trainer = CustomDPOTrainer(
+                self.model,
+                ref_model=None,  # set to none since we use peft
+                peft_config=peft_config,
+                args=args,
+                train_dataset=self.data_module.train_dataset,
+                eval_dataset=self.data_module.val_dataset,
+                tokenizer=self.tokenizer,  # type: ignore
+            )
+            self.trainer.set_custom_args(
+                self.config.max_eval_sample_length,
+                True,
+                output_dir,
+                self.config.eval_data_mode,
+                self.config.using_mistral,
+            )
 
-                self.trainer.train_dataset.to_parquet(train_cache_location)
-                self.trainer.eval_dataset.to_parquet(eval_cache_location)
-                self.trainer.args.per_device_train_batch_size = (
-                    self.config.train_batch_size
+            if self.trainer.precompute_ref_log_probs:
+                eval_cache_location, train_cache_location = (
+                    f"{self.ref_logpbrobs_cache_location}_eval.parquet",
+                    f"{self.ref_logpbrobs_cache_location}_train.parquet",
                 )
+                if os.path.exists(train_cache_location):
+                    logger.info("Loading cached logprobs...")
+                    # TODO add support for eval dataset
+                    self.trainer.train_dataset = load_dataset("parquet", data_files={"train": train_cache_location})["train"]  # type: ignore
+                    self.trainer.eval_dataset = load_dataset("parquet", data_files={"train": eval_cache_location})["train"]  # type: ignore
+                    self.trainer._precomputed_train_ref_log_probs = True
+                    self.trainer._precomputed_eval_ref_log_probs = True
+                    logger.info("Loaded.")
+                else:
+                    # force precomputing of reference logprobs
+                    logger.info(
+                        f"Precomputing reference logprobs, batch size: {self.config.logprob_precompute_batch_size}"
+                    )
+                    self.trainer.args.per_device_train_batch_size = (
+                        self.config.logprob_precompute_batch_size
+                    )
+
+                    logger.info("Precomputing train logprobs")
+                    self.trainer.get_train_dataloader()
+                    logger.info("Precomputing eval logprobs")
+                    self.trainer.get_eval_dataloader()
+                    logger.info("Saving reference logprobs...")
+                    assert self.trainer.eval_dataset is not None
+                    assert self.trainer.train_dataset is not None
+
+                    self.trainer.train_dataset.to_parquet(train_cache_location)
+                    self.trainer.eval_dataset.to_parquet(eval_cache_location)
+                    self.trainer.args.per_device_train_batch_size = (
+                        self.config.train_batch_size
+                    )
 
     def compute_loss_metrics(self, batch_size: int = 1):
         """
