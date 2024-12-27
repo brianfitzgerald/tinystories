@@ -13,13 +13,6 @@ from synthetic_data.conversion import chatml_to_conversation
 
 
 class FunctionCallingDataModule(SmDataset):
-    def __init__(
-        self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
-    ):
-        super().__init__(batch_size, tokenizer, max_token_length)
 
     def setup(self, stage: Optional[str] = None):
         print(f"Loading dataset for stage {stage}")

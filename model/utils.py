@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Union
+import re
 
 import lightning.pytorch as pl
 from datasets import load_dataset
@@ -23,7 +24,8 @@ IGNORE_TOKEN_INDEX = -100
 PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
-TuningType = Literal["sft", "dpo"]
+DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo"]
+TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora", "sft"]
 
 
 class ModelChoice(Enum):
@@ -51,7 +53,7 @@ class LMHyperParams:
     seed: int = 42
     weight_decay: float = 0.0
     optimizer: OptimizerChoice = "AdamW8bit"
-    tuning_type: TuningType = "sft"
+    tuning_type: TuningModeChoice = "sft"
 
     def warmup_steps(self, train_steps: Union[int, float]) -> int:
         if self.warmup_ratio:
@@ -68,16 +70,25 @@ class LMHyperParams:
         return self.base_model_checkpoint
 
 
+def class_name_to_underscore(cls):
+    class_name = cls.__name__  # Get the class name
+    underscore_case = re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
+    return underscore_case
+
+
 class SmDataset(pl.LightningDataModule):
     def __init__(
         self,
         batch_size: int,
         tokenizer: PreTrainedTokenizer,
         max_token_length: int,
+        tuning_mode: TuningModeChoice,
+        max_samples: Optional[int] = None,
         use_cache: bool = True,
     ):
         super().__init__()
 
+        self.max_samples = max_samples
         self.train_dataset = None
         self.val_dataset = None
         self.batch_size = batch_size
@@ -85,16 +96,16 @@ class SmDataset(pl.LightningDataModule):
         self.max_token_length = max_token_length
         self.num_workers = min(len(os.sched_getaffinity(0)), 8)
         self.num_workers = 1
-        self.cache_dir = "dataset_caches/default"
+        self.cache_dir = f"dataset_caches/{class_name_to_underscore(self.__class__)}"
         self.input_column, self.target_column = "context", "fields"
         self.use_cache = use_cache
-        self.dataset_name = "roborovski/squad-extractive-qa"
         self.train_dataset = None
         self.val_dataset = None
+        self.tuning_mode: TuningModeChoice = tuning_mode
 
     def load_dataset(self):
         # Load dataset and split
-        dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset("roborovski/squad-extractive-qa")["train"].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -110,8 +121,12 @@ class SmDataset(pl.LightningDataModule):
         assert self.train_dataset is not None
         assert self.val_dataset is not None
 
+        process_fn = self.process_samples_batch
+        if self.tuning_mode in ("sft", "sft_lora"):
+            process_fn = self.process_samples_batch_sft
+
         self.train_dataset = self.train_dataset.map(
-            self.process_samples_batch,
+            process_fn,
             batched=True,
             load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
@@ -119,7 +134,7 @@ class SmDataset(pl.LightningDataModule):
         )
 
         self.val_dataset = self.val_dataset.map(
-            self.process_samples_batch,
+            process_fn,
             batched=True,
             load_from_cache_file=self.use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
@@ -143,11 +158,14 @@ class SmDataset(pl.LightningDataModule):
             self.val_dataset.set_format(type="torch", columns=columns)
         else:
             logger.warning(
-                f"Computed columns not found in dataset: {self.train_dataset.column_names} assuming using "
+                f"Columns in dataset: {self.train_dataset.column_names} do not match torch columns, not setting format"
             )
 
     def process_samples_batch(self, examples: dict):
         return self._tokenize(examples[self.input_column], examples[self.target_column])
+
+    def process_samples_batch_sft(self, examples: dict):
+        raise NotImplementedError("Subclass must implement this method")
 
     def _tokenize(self, inputs: List[str], labels: List[str]) -> dict:
         inputs_tokenized = self.tokenizer(

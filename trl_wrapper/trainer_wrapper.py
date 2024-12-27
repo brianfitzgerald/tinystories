@@ -18,13 +18,14 @@ from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
 from trl.trainer.sft_trainer import SFTTrainer
 from trl.trainer.sft_config import SFTConfig
+from trl.trainer.utils import DataCollatorForCompletionOnlyLM
 
-from dataset.squad import (
+from dataset.code import (
     CodeContestsDataModule,
     UltraFeedbackDataModule,
     EvolCodeAlpacaDataModule,
 )
-from model.utils import ensure_directory, save_dataclass_to_json, short_hash
+from model.utils import ensure_directory, save_dataclass_to_json, short_hash, TuningModeChoice, DataModuleChoice, OptimizerChoice
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
 
@@ -38,8 +39,6 @@ SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
 MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
-DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo"]
-TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora"]
 
 DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
 
@@ -154,6 +153,7 @@ class TrainerWrapper:
         self.tokenizer.truncation_side = "left"
 
     def init_data_module(self):
+        print(self.config.data_module_choice)
         if self.config.data_module_choice == "ultra_feedback":
             self.data_module = UltraFeedbackDataModule(
                 self.config.max_samples,
@@ -164,14 +164,14 @@ class TrainerWrapper:
                 self.config.train_batch_size,
                 self.tokenizer,
                 self.config.max_sequence_length,
-                self.config.max_samples,
+                self.config.tuning_mode
             )
         elif self.config.data_module_choice == "evol_codealpaca_dpo":
             self.data_module = EvolCodeAlpacaDataModule(
                 self.config.train_batch_size,
                 self.tokenizer,
                 self.config.max_sequence_length,
-                self.config.max_samples,
+                self.config.tuning_mode
             )
         if self.config.notebook_mode:
             self.data_module.num_workers = 1
@@ -243,14 +243,14 @@ class TrainerWrapper:
                 report_to="wandb" if self.use_wandb else "none",
                 dataloader_num_workers=0 if self.config.notebook_mode else 4,
                 dataset_num_proc=1 if self.config.notebook_mode else 4,
-                max_length=self.config.max_sequence_length,
-                max_prompt_length=self.config.max_prompt_length,
+                max_seq_length=self.config.max_sequence_length,
                 dataloader_pin_memory=True,
-                generate_during_eval=True,
                 run_name=run_name,
+                dataset_text_field="prompt",
                 output_dir=output_dir,
                 disable_tqdm=not self.config.notebook_mode,
             )
+
             self.trainer = SFTTrainer(
                 self.model,
                 peft_config=peft_config,
