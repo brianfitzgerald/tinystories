@@ -628,64 +628,71 @@ class CodeContests(HumanEval):
             problem = self.problems[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
-            for j, completion in enumerate(completions_for_sample):
-                if not completion:
-                    logger.error(f"Empty completion for problem {i}")
-                    continue
-                code_snippets = extract_code_block(completion, "python")
-                if len(code_snippets) == 0:
-                    logger.error(f"No code snippet found for completion {i}")
-                    continue
-                if len(code_snippets) != 1:
-                    logger.warning(
-                        f"Has more than one code snippet: {code_snippets} for completion {i}"
+            self.console.print(completions[0])
+            if self.positive_completion_mode != PositiveMode.NO_COMPARISON:
+                for j, completion in enumerate(completions_for_sample):
+                    if not completion:
+                        logger.error(f"Empty completion for problem {i}")
+                        continue
+                    code_snippets = extract_code_block(completion, "python")
+                    if len(code_snippets) == 0:
+                        logger.error(f"No code snippet found for completion {i}")
+                        continue
+                    if len(code_snippets) != 1:
+                        logger.warning(
+                            f"Has more than one code snippet: {code_snippets} for completion {i}"
+                        )
+                    completion_code = code_snippets[0]
+                    print_code_snippet(completion_code, self.console)
+                    test_results_for_completion, test_results_have_errors = (
+                        evaluate_sample_against_codecontests_tests(
+                            completion_code,
+                            problem.public_tests["input"],
+                            problem.public_tests["output"],
+                            self.execution_mode,
+                        )
                     )
-                completion = code_snippets[0]
-                print_code_snippet(completion, self.console)
-                test_results_for_completion, test_results_have_errors = (
-                    evaluate_sample_against_codecontests_tests(
-                        completion,
-                        problem.public_tests["input"],
-                        problem.public_tests["output"],
-                        self.execution_mode,
+                    flattened_test_results = flatten_list(test_results_for_completion)
+                    n_tests_passed = sum(flattened_test_results)
+                    logger.info(
+                        f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_test_results)}"
                     )
-                )
-                flattened_tests = flatten_list(test_results_for_completion)
-                n_tests_passed = sum(flattened_tests)
-                logger.info(
-                    f"Tests passed for completion {j}: {n_tests_passed} / {len(flattened_tests)}"
-                )
-                if self.positive_completion_mode == PositiveMode.BEST_OF_N:
-                    if n_tests_passed > best_score:
-                        best_score = n_tests_passed
-                        best_completion = completion
-                    if n_tests_passed < worst_score:
-                        worst_score = n_tests_passed
+                    if self.positive_completion_mode == PositiveMode.BEST_OF_N:
+                        if n_tests_passed > best_score:
+                            best_score = n_tests_passed
+                            best_completion = completion_code
+                        if n_tests_passed < worst_score:
+                            worst_score = n_tests_passed
+                            worst_completion = completion_code
+                        if best_completion is None or worst_completion is None:
+                            logger.warning(
+                                f"Could not find best or worst completion for problem {i}, scores: {best_score}, {worst_score}"
+                            )
+                            continue
+                        if best_score == worst_score:
+                            logger.warning(
+                                f"Best and worst completions have the same score for problem {i}: {best_score}"
+                            )
+                            continue
+                    elif (
+                        self.positive_completion_mode
+                        == PositiveMode.REFERENCE_COMPLETION
+                    ):
+                        if any(test_results_have_errors):
+                            logger.warning(
+                                f"Errors in tests for completion {j}, skipping..."
+                            )
+                            continue
+                        best_completion = problem.solution
                         worst_completion = completion
-                    if best_completion is None or worst_completion is None:
-                        logger.warning(
-                            f"Could not find best or worst completion for problem {i}, scores: {best_score}, {worst_score}"
-                        )
-                        continue
-                    if best_score == worst_score:
-                        logger.warning(
-                            f"Best and worst completions have the same score for problem {i}: {best_score}"
-                        )
-                        continue
-                elif self.positive_completion_mode == PositiveMode.REFERENCE_COMPLETION:
-                    if any(test_results_have_errors):
-                        logger.warning(
-                            f"Errors in tests for completion {j}, skipping..."
-                        )
-                        continue
-                    best_completion = problem.solution
-                    worst_completion = completion
-                    best_score = 1
-                    worst_score = 0
+                        best_score = 1
+                        worst_score = 0
             if self.positive_completion_mode == PositiveMode.NO_COMPARISON:
                 res.append(
                     {
-                        "completions": completions_for_sample,
+                        "completions": completions,
+                        "name": problem.name,
+                        "problem": problem.description,
                     }
                 )
             else:
@@ -711,7 +718,7 @@ class CodeContestsCoTSFT(CodeContests):
     def __init__(self, console: Console) -> None:
         super().__init__(console)
         self.n_completions_per_sample = 1
-        self.positive_completion_mode = PositiveMode.BEST_OF_N
+        self.positive_completion_mode = PositiveMode.NO_COMPARISON
         self.using_sft_cot = True
 
 

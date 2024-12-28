@@ -1,12 +1,10 @@
 import asyncio
-import os
 from typing import Dict, List, Optional, cast
 
 import fire
 import pandas as pd
 from datasets import Dataset, load_dataset
 from datasets.data_files import EmptyDatasetError
-from dotenv import dotenv_values
 from loguru import logger
 from rich.console import Console
 from tqdm import tqdm
@@ -17,13 +15,13 @@ from synthetic_data.generation import (
     RemoteModel,
     save_output_dataset,
 )
-from synthetic_data.tasks import ALL_TASKS, CodeContests
+from synthetic_data.tasks import ALL_TASKS
 from synthetic_data.utils import DatasetFormat
 
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 1,
+    batch_size: int = 4,
     restart: bool = False,
     resume_input_position: bool = True,
     model: str = RemoteModel.DEEPSEEK_V3.value,
