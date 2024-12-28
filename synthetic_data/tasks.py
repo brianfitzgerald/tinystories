@@ -576,7 +576,9 @@ class CodeContests(HumanEval):
                 problem = _convert_mbpp_to_humaneval(mbpp_problem)
                 fn_name = get_fn_name_from_assert(mbpp_problem.test_list[0])
                 if not fn_name:
-                    logger.error(f"Could not find function name for problem {mbpp_problem.task_id}")
+                    logger.error(
+                        f"Could not find function name for problem {mbpp_problem.task_id}"
+                    )
                     return [{"role": "system", "content": problem.prompt}]
                 problem.entry_point = fn_name
             else:
@@ -631,7 +633,7 @@ class CodeContests(HumanEval):
                         completion,
                         problem.public_tests["input"],
                         problem.public_tests["output"],
-                        self.execution_mode
+                        self.execution_mode,
                     )
                 )
                 flattened_tests = flatten_list(test_results_for_completion)

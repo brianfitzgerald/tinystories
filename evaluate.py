@@ -18,10 +18,11 @@ from evaluation.code_execution import (
     evaluate_codecontests,
 )
 from synthetic_data.generation import (
-    MODEL_WRAPPER_CLASSES,
-    GenerationSource,
+    MODEL_CONFIGS,
+    RemoteModel,
     GenerationWrapper,
     GenerationWrapperArgs,
+    get_model_wrapper,
 )
 from synthetic_data.tasks import ALL_TASKS
 from synthetic_data.utils import Conversation, dictl, ensure_directory
@@ -53,23 +54,19 @@ def _save_eval_results_to_csv(eval_results: List[EvalResult], out_dir: str):
 async def main(
     batch_size: int = 4,
     task_name: str = "codecontests",
-    gen_source: str = GenerationSource.VLLM.value,
+    gen_source: str = RemoteModel.QWEN_QWQ.value,
 ):
     console = Console()
     task = ALL_TASKS[task_name](console)
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
-    args = GenerationWrapperArgs()
-    args.dotenv = dotenv
     console = Console()
-    gen_source_enum = GenerationSource(gen_source)
-    model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[gen_source_enum](args)
+    model_wrapper = get_model_wrapper(gen_source)
 
     simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
     random_id = int(random.random() * 1000)
     run_name = f"{task_name}_{gen_source}_{simple_date}_{random_id}"
     console.print(f"Starting eval run: {run_name}")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     out_dir = os.path.join(current_dir, "eval_results", run_name)
     ensure_directory(out_dir)
 

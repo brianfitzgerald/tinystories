@@ -216,13 +216,13 @@ def evaluate_sample_ast(
 class WriteOnlyStringIO(io.StringIO):
     """StringIO that throws an exception when it's read from"""
 
-    def read(self, *args, **kwargs):
+    def read(self, *args, **kwargs): # type: ignore
         print(args, kwargs)
 
-    def readline(self, *args, **kwargs):
+    def readline(self, *args, **kwargs): # type: ignore
         print(args, kwargs)
 
-    def readlines(self, *args, **kwargs):
+    def readlines(self, *args, **kwargs): # type: ignore
         print(args, kwargs)
 
     def readable(self, *args, **kwargs):
@@ -363,6 +363,8 @@ def evaluate_codecontests(
             elif eval_task.code_task_format == "humaneval":
                 sample = HumanEvalProblem(**sample_dict)
                 tests, n_asserts = assertions_to_tests(sample.test, sample.entry_point)
+            else:
+                raise ValueError("Invalid code task format")
             full_code = generated_code + "\n" + tests + "\ncheck()"
             console.print(f"Evaluating sample: {sample.task_id}")
             console.print(f"Canonical solution:")

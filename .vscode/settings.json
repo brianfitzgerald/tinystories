@@ -3,7 +3,7 @@
         "editor.defaultFormatter": "ms-python.black-formatter"
     },
     "python.formatting.provider": "none",
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "standard",
     "python.testing.pytestArgs": [
         "tests"
     ],

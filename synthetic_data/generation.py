@@ -1,15 +1,17 @@
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, cast
 
-import aiohttp
 import google.genai as genai
 import google.genai.types
 from anthropic import AnthropicError, AsyncAnthropic
 from anthropic.types.message import Message
 from anthropic.types.message_param import MessageParam
 from datasets import Dataset, concatenate_datasets
+from dotenv import dotenv_values
+from huggingface_hub import login
 from loguru import logger
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
@@ -49,6 +51,7 @@ def save_output_dataset(
 
 @dataclass
 class GenerationWrapperArgs:
+    model_id: Optional[str] = None
     lora_name: Optional[str] = None
     dotenv: dict[str, str] = field(default_factory=dict)
 
@@ -86,24 +89,6 @@ class MockGenerator(GenerationWrapper):
         return [MOCK_SNIPPET] * len(conversations)
 
 
-class LocalGenerator(GenerationWrapper):
-
-    async def generate(self, conversations: List[Conversation]) -> List[str]:
-        url = "http://0.0.0.0:8080/generate"
-        payload = {"conversations": conversations, "max_length": 4096}
-        headers = {"Content-Type": "application/json"}
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as response:
-                logger.info(f"Generate request status: {response.status}")
-                if response.status != 200:
-                    raise ValueError(f"Failed to generate: {response.status}")
-                response_body = await response.json()
-                completions = response_body["completions"]
-                completions = [completions]
-                return completions
-
-
 MAX_RETRIES = 3
 
 
@@ -113,7 +98,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
         self.oai_client = AsyncOpenAI(api_key=api_key)
-        self.model_name = "gpt-4o-mini"
+        self.model_name = args.model_id or "gpt-4o-mini"
         self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
@@ -165,7 +150,6 @@ class VLLMWrapper(OpenAIGenerationWrapper):
         self.oai_client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
         )
-        self.model_name = "mistralai/Mistral-7B-Instruct-v0.3"
         self.max_concurrent = 4
         self.temperature = 0.4
 
@@ -181,7 +165,6 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.model_name = "meta-llama/llama-3.1-70b-instruct"
         self.max_concurrent = 4
         self.temperature = 0.4
 
@@ -270,22 +253,34 @@ class GeminiWrapper(GenerationWrapper):
         return [result.text for result in results]
 
 
-class GenerationSource(str, Enum):
-    OPENAI = "openai"
-    VLLM = "vllm"
-    OPENROUTER = "openrouter"
-    ANTHROPIC = "anthropic"
-    GEMINI = "gemini"
-    MOCK = "mock"
-    LOCAL = "local"
+class RemoteModel(str, Enum):
+    CLAUDE_3_5 = "claude-3-5"
+    QWEN_QWQ = "qwen-qwq"
 
 
-MODEL_WRAPPER_CLASSES = {
-    GenerationSource.OPENAI: OpenAIGenerationWrapper,
-    GenerationSource.VLLM: VLLMWrapper,
-    GenerationSource.OPENROUTER: OpenRouterGenerationWrapper,
-    GenerationSource.ANTHROPIC: AnthropicGenerationWrapper,
-    GenerationSource.GEMINI: GeminiWrapper,
-    GenerationSource.MOCK: MockGenerator,
-    GenerationSource.LOCAL: LocalGenerator,
+@dataclass
+class ModelConfig:
+    model: type[GenerationWrapper]
+    args: Optional[GenerationWrapperArgs] = None
+
+
+MODEL_CONFIGS: dict[str, ModelConfig] = {
+    RemoteModel.QWEN_QWQ: ModelConfig(
+        OpenRouterGenerationWrapper,
+        GenerationWrapperArgs(model_id="qwen/qwq-32b-preview"),
+    ),
+    RemoteModel.CLAUDE_3_5: ModelConfig(AnthropicGenerationWrapper),
 }
+
+
+def get_model_wrapper(model_name: str) -> GenerationWrapper:
+    model_name_enum = RemoteModel(model_name)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
+    hf_token = dotenv["HF_TOKEN"]
+    logger.info(f"Logging in with token: {hf_token}")
+    login(token=hf_token, add_to_git_credential=True)
+    config = MODEL_CONFIGS[model_name_enum]
+    if config.args is None:
+        config.args = GenerationWrapperArgs(dotenv=dotenv)
+    return config.model(config.args)

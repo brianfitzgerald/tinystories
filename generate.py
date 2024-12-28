@@ -1,31 +1,24 @@
 import asyncio
 import os
 from typing import Dict, List, Optional, cast
-import pandas as pd
-from loguru import logger
-from rich.console import Console
 
 import fire
+import pandas as pd
 from datasets import Dataset, load_dataset
 from datasets.data_files import EmptyDatasetError
 from dotenv import dotenv_values
-from huggingface_hub import login
+from loguru import logger
+from rich.console import Console
 from tqdm import tqdm
-from synthetic_data.tasks import (
-    ALL_TASKS,
-    CodeContests,
-)
 
 from synthetic_data.generation import (
-    MODEL_WRAPPER_CLASSES,
-    GenerationWrapper,
-    GenerationSource,
+    get_model_wrapper,
     MockGenerator,
+    RemoteModel,
     save_output_dataset,
 )
-from synthetic_data.utils import (
-    DatasetFormat,
-)
+from synthetic_data.tasks import ALL_TASKS, CodeContests
+from synthetic_data.utils import DatasetFormat
 
 
 def main(
@@ -33,7 +26,7 @@ def main(
     batch_size: int = 4,
     restart: bool = False,
     resume_input_position: bool = True,
-    model: str = GenerationSource.VLLM.value,
+    model: str = RemoteModel.QWEN_QWQ.value,
     task_name: str = "codecontests",
     n_epochs: int = 5,
     **kwargs,
@@ -58,20 +51,12 @@ def main(
     console = Console()
     task = ALL_TASKS[task_name](console)
     split = task.seed_data_split
-    logger.info("Logging into the Hub...")
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    dotenv = dotenv_values(os.path.join(current_dir, ".env"))
-    hf_token = dotenv["HF_TOKEN"]
-    logger.info(f"Logging in with token: {hf_token}")
-    login(token=hf_token, add_to_git_credential=True)
 
-    generation_source = GenerationSource(model)
-    model_wrapper: GenerationWrapper = MODEL_WRAPPER_CLASSES[generation_source](dotenv)
+    model_wrapper = get_model_wrapper(model)
+    output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
 
     logger.info("Loading output dataset...")
-    if restart:
-        output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
-    else:
+    if not restart:
         if task.output_dataset_format == DatasetFormat.HF_DATASET:
             try:
                 output_dataset = cast(
@@ -126,7 +111,7 @@ def main(
         f"Input dataset length: {len(input_dataset)} Output dataset: {len(output_dataset)}"
     )
     new_dataset_rows: List[Dict] = []
-    logger.info(f"Generating with model {generation_source.value}")
+    logger.info(f"Generating with model {model} for task {task_name}")
 
     n_batches = len(input_dataset) // batch_size
 
