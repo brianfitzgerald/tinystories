@@ -246,7 +246,7 @@ class TrainerWrapper:
                 max_seq_length=self.config.max_sequence_length,
                 dataloader_pin_memory=True,
                 run_name=run_name,
-                dataset_text_field="prompt",
+                dataset_text_field="conversation",
                 output_dir=output_dir,
                 disable_tqdm=not self.config.notebook_mode,
             )

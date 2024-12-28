@@ -96,7 +96,12 @@ class SmDataset(pl.LightningDataModule):
         self.max_token_length = max_token_length
         self.num_workers = min(len(os.sched_getaffinity(0)), 8)
         self.num_workers = 1
-        self.cache_dir = f"dataset_caches/{class_name_to_underscore(self.__class__)}"
+        current_dir = Path().resolve().name
+        prefix = ""
+        if current_dir == "notebooks":
+            prefix = "../"
+        self.cache_dir = f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}"
+        logger.info(f"Cache dir: {self.cache_dir}")
         self.input_column, self.target_column = "context", "fields"
         self.use_cache = use_cache
         self.train_dataset = None

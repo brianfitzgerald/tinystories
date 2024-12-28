@@ -101,12 +101,13 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
                 out_dict[response_role].append(triplets[response_role])
         return out_dict
 
-SFT_COLS = ["conversation"]
+SFT_COLS = ["conversations"]
 
 class EvolCodeAlpacaDataModule(SmDataset):
 
     def load_dataset(self):
         # Load dataset and split
+        logger.info("Loading dataset")
         dataset = load_dataset("AlekseyKorshuk/evol-codealpaca-v1-dpo")["train"].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
@@ -124,9 +125,10 @@ class EvolCodeAlpacaDataModule(SmDataset):
         print(dict(data).keys())
         for i in range(len(data["question"])):
             system, question = data["system"][i], data["question"][i]
-            conversation = [
+            conv = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": question},
             ]
-            out["messages"].append(conversation)
+            out["conversations"].append(conv)
+        print(dict(out).keys())
         return out
