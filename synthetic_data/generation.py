@@ -51,7 +51,7 @@ def save_output_dataset(
 
 
 @dataclass
-class GenerationWrapperArgs:
+class GenWrapperArgs:
     model_id: Optional[str] = None
     lora_name: Optional[str] = None
     dotenv: dict[str, str] = field(default_factory=dict)
@@ -62,7 +62,7 @@ class GenerationWrapper(ABC):
     Abstract method for various ways of generating data.
     """
 
-    def __init__(self, args: GenerationWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         super().__init__()
         self.args = args
 
@@ -78,7 +78,7 @@ def solution(problem_input):
 
 
 class MockGenerator(GenerationWrapper):
-    def __init__(self, _: GenerationWrapperArgs) -> None:
+    def __init__(self, _: GenWrapperArgs) -> None:
         self.mock_completions = []
 
     def set_mock_completions(self, completions: List[str]) -> None:
@@ -94,7 +94,7 @@ MAX_RETRIES = 3
 
 
 class OpenAIGenerationWrapper(GenerationWrapper):
-    def __init__(self, args: GenerationWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         api_key = args.dotenv.get("OPENAI_API_KEY")
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
@@ -147,7 +147,7 @@ class OpenAIGenerationWrapper(GenerationWrapper):
 
 
 class VLLMWrapper(OpenAIGenerationWrapper):
-    def __init__(self, _: GenerationWrapperArgs) -> None:
+    def __init__(self, _: GenWrapperArgs) -> None:
         self.oai_client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
         )
@@ -156,7 +156,7 @@ class VLLMWrapper(OpenAIGenerationWrapper):
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
-    def __init__(self, args: GenerationWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         super().__init__(args)
         api_key = args.dotenv.get("OPENROUTER_API_KEY")
         if api_key is None:
@@ -172,7 +172,7 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
 
 
 class AnthropicGenerationWrapper(GenerationWrapper):
-    def __init__(self, args: GenerationWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         api_key = args.dotenv.get("ANTHROPIC_API_KEY")
         if api_key is None:
             raise ValueError(
@@ -226,7 +226,7 @@ def _openai_conversation_to_gemini(conversation: Conversation):
 
 
 class GeminiWrapper(GenerationWrapper):
-    def __init__(self, args: GenerationWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         api_key = args.dotenv.get("GOOGLE_API_KEY")
         if api_key is None:
             raise ValueError("GOOGLE_API_KEY is required for GeminiWrapper")
@@ -258,26 +258,31 @@ class GeminiWrapper(GenerationWrapper):
 class RemoteModel(str, Enum):
     CLAUDE_3_5 = "claude-3-5"
     QWEN_QWQ = "qwen-qwq"
+    DEEPSEEK_V3 = "deepseek-v3"
     GPT_4O_MINI = "gpt-4o-mini"
     MOCK = "mock"
 
 
 @dataclass
-class ModelConfig:
+class RemoteModelChoice:
     model: type[GenerationWrapper]
-    args: Optional[GenerationWrapperArgs] = None
+    args: Optional[GenWrapperArgs] = None
 
 
-MODEL_CONFIGS: dict[str, ModelConfig] = {
-    RemoteModel.QWEN_QWQ: ModelConfig(
+MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
+    RemoteModel.QWEN_QWQ: RemoteModelChoice(
         OpenRouterGenerationWrapper,
-        GenerationWrapperArgs(model_id="qwen/qwq-32b-preview"),
+        GenWrapperArgs(model_id="qwen/qwq-32b-preview"),
     ),
-    RemoteModel.CLAUDE_3_5: ModelConfig(AnthropicGenerationWrapper),
-    RemoteModel.GPT_4O_MINI: ModelConfig(
-        OpenAIGenerationWrapper, GenerationWrapperArgs(model_id="gpt-4o-mini")
+    RemoteModel.DEEPSEEK_V3: RemoteModelChoice(
+        OpenRouterGenerationWrapper,
+        GenWrapperArgs(model_id="deepseek/deepseek-chat"),
     ),
-    RemoteModel.MOCK: ModelConfig(MockGenerator),
+    RemoteModel.CLAUDE_3_5: RemoteModelChoice(AnthropicGenerationWrapper),
+    RemoteModel.GPT_4O_MINI: RemoteModelChoice(
+        OpenAIGenerationWrapper, GenWrapperArgs(model_id="gpt-4o-mini")
+    ),
+    RemoteModel.MOCK: RemoteModelChoice(MockGenerator),
 }
 
 
@@ -290,7 +295,7 @@ def get_generation_wrapper(model_name: str) -> GenerationWrapper:
     login(token=hf_token, add_to_git_credential=True)
     config = MODEL_CONFIGS[model_name_enum]
     if config.args is None:
-        config.args = GenerationWrapperArgs(dotenv=dotenv)
+        config.args = GenWrapperArgs(dotenv=dotenv)
     else:
         config.args.dotenv = dotenv
     return config.model(config.args)

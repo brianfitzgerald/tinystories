@@ -28,6 +28,7 @@ from evaluation.code_execution import (
 from synthetic_data.conversion import chatml_to_conversation
 from synthetic_data.generation import SHAREGPT_TO_OPENAI_ROLE
 from synthetic_data.prompts import (
+    format_codecontests_cot_generation_prompt,
     format_codecontests_generation_prompt,
     format_dalle_prompt_template,
     format_entity_extraction_conversation_template,
@@ -568,6 +569,7 @@ class CodeContests(HumanEval):
         self.print_definitions = False
         self.positive_completion_mode = PositiveMode.REFERENCE_COMPLETION
         self.execution_mode: CodeExecutionMode = "exec"
+        self.using_sft_cot = False
 
     def format_inference_conversation(
         self, sample: Dict, eval_task: Optional[EvalTask] = None
@@ -605,10 +607,16 @@ class CodeContests(HumanEval):
                         f"\n\n# Problem {i}, {problem.name}\n\n{problem.description}"
                     )
                 )
-            self.input_conversations.extend(
-                [format_codecontests_generation_prompt(problem.description)]
-                * self.n_completions_per_sample
-            )
+            if self.using_sft_cot:
+                self.input_conversations.extend(
+                    [format_codecontests_cot_generation_prompt(problem.description)]
+                    * self.n_completions_per_sample
+                )
+            else:
+                self.input_conversations.extend(
+                    [format_codecontests_generation_prompt(problem.description)]
+                    * self.n_completions_per_sample
+                )
         return self.input_conversations
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
@@ -704,7 +712,7 @@ class CodeContestsCoTSFT(CodeContests):
         super().__init__(console)
         self.n_completions_per_sample = 1
         self.positive_completion_mode = PositiveMode.BEST_OF_N
-
+        self.using_sft_cot = True
 
 
 ALL_TASKS: Dict[str, type[BaseTask]] = {

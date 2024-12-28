@@ -26,7 +26,7 @@ def main(
     batch_size: int = 1,
     restart: bool = False,
     resume_input_position: bool = True,
-    model: str = RemoteModel.QWEN_QWQ.value,
+    model: str = RemoteModel.DEEPSEEK_V3.value,
     task_name: str = "codecontests_cot_sft",
     n_epochs: int = 5,
     **kwargs,

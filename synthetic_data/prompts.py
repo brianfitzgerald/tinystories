@@ -383,12 +383,37 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
     return conv
 
 
-def format_codecontests_generation_prompt(description: str, fn_name: Optional[str] = None) -> Conversation:
+def format_codecontests_generation_prompt(
+    description: str, fn_name: Optional[str] = None
+) -> Conversation:
     conv: Conversation = [
         {
             "role": "system",
             "content": f"You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
         },
-        {"role": "user", "content": description if not fn_name else f"{description} Name the function `{fn_name}`."},
+        {
+            "role": "user",
+            "content": (
+                description
+                if not fn_name
+                else f"{description} Name the function `{fn_name}`."
+            ),
+        },
+    ]
+    return conv
+
+
+def format_codecontests_cot_generation_prompt(
+    description: str, fn_name: Optional[str] = None
+) -> Conversation:
+    conv: Conversation = [
+        {
+            "role": "system",
+            "content": f"You are an expert system that answers coding questions. Describe in detail your reasoning behind each answer, then give the final answer. Do not give any example outputs or tests. Return code in Markdown snippets. Return the output instead of writing to stdout.",
+        },
+        {
+            "role": "user",
+            "content": f"Write Python code to solve the following problem: {description} Name the function `{fn_name}`.",
+        },
     ]
     return conv
