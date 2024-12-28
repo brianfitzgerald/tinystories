@@ -122,7 +122,6 @@ class EvolCodeAlpacaDataModule(SmDataset):
 
     def process_samples_batch_sft(self, data):
         out = {k: [] for k in SFT_COLS}
-        print(dict(data).keys())
         for i in range(len(data["question"])):
             system, question = data["system"][i], data["question"][i]
             conv = [
@@ -130,5 +129,4 @@ class EvolCodeAlpacaDataModule(SmDataset):
                 {"role": "user", "content": question},
             ]
             out["conversations"].append(conv)
-        print(dict(out).keys())
         return out

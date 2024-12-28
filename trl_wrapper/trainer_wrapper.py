@@ -25,7 +25,14 @@ from dataset.code import (
     UltraFeedbackDataModule,
     EvolCodeAlpacaDataModule,
 )
-from model.utils import ensure_directory, save_dataclass_to_json, short_hash, TuningModeChoice, DataModuleChoice, OptimizerChoice
+from model.utils import (
+    ensure_directory,
+    save_dataclass_to_json,
+    short_hash,
+    TuningModeChoice,
+    DataModuleChoice,
+    OptimizerChoice,
+)
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
 
@@ -103,7 +110,7 @@ CODECONTESTS_CONFIG = WrapperConfig(
     using_mistral=True,
 )
 
-CODECONTESTS_SFT_CONFIG = replace(CODECONTESTS_CONFIG, tuning_mode="sft_lora")
+CODECONTESTS_SFT_CONFIG = replace(CODECONTESTS_CONFIG, tuning_mode="sft")
 
 
 CONFIGS = {
@@ -153,7 +160,6 @@ class TrainerWrapper:
         self.tokenizer.truncation_side = "left"
 
     def init_data_module(self):
-        print(self.config.data_module_choice)
         if self.config.data_module_choice == "ultra_feedback":
             self.data_module = UltraFeedbackDataModule(
                 self.config.max_samples,
@@ -164,14 +170,14 @@ class TrainerWrapper:
                 self.config.train_batch_size,
                 self.tokenizer,
                 self.config.max_sequence_length,
-                self.config.tuning_mode
+                self.config.tuning_mode,
             )
         elif self.config.data_module_choice == "evol_codealpaca_dpo":
             self.data_module = EvolCodeAlpacaDataModule(
                 self.config.train_batch_size,
                 self.tokenizer,
                 self.config.max_sequence_length,
-                self.config.tuning_mode
+                self.config.tuning_mode,
             )
         if self.config.notebook_mode:
             self.data_module.num_workers = 1
@@ -182,11 +188,12 @@ class TrainerWrapper:
         # Get run name
         simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
         random_id = int(torch.rand(1) * 1000000)
-        run_name = f"run-{simple_date}-{random_id}"
+        model_id_without_org = self.config.model_id_or_path.split("/")[-1].lower()
+        run_name = f"run-{simple_date}-{random_id}-{self.config.data_module_choice}-{self.config.tuning_mode}-{model_id_without_org}"
         if comment is not None:
             run_name += f"-{comment}"
 
-        output_dir = f"outputs/{run_name}"
+        output_dir = f"runs/{run_name}"
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 
@@ -219,7 +226,7 @@ class TrainerWrapper:
         )
         logger.info(self.config)
 
-        if self.config.tuning_mode == "sft_lora":
+        if self.config.tuning_mode in ("sft", "sft_lora"):
             args = SFTConfig(
                 num_train_epochs=self.config.n_epochs,
                 per_device_train_batch_size=self.config.train_batch_size,

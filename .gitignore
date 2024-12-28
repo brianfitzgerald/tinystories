@@ -199,3 +199,5 @@ notebooks/logs/*
 *.txt
 out/
 notebooks/dataset_caches/*
+runs/
+eval_results/

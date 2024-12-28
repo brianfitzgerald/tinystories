@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from typing import Dict, List, cast
 
@@ -69,7 +70,7 @@ async def main(
     random_id = int(random.random() * 1000)
     run_name = f"{task_name}_{gen_source}_{simple_date}_{random_id}"
     console.print(f"Starting eval run: {run_name}")
-    out_dir = os.path.join(current_dir, "out", run_name)
+    out_dir = os.path.join(current_dir, "eval_results", run_name)
     ensure_directory(out_dir)
 
     eval_results: List[EvalResult] = []
@@ -113,6 +114,13 @@ async def main(
         f"Samples where all tests passed: {n_all_tests_passed}/{len(eval_results)}"
     )
     console.print(f"Total tests passed: {n_tests_passed}/{total_n_tests}")
+    summary_dict = {
+        "n_all_tests_passed": n_all_tests_passed,
+        "n_tests_passed": n_tests_passed,
+        "total_n_tests": total_n_tests,
+    }
+    with open(f"{out_dir}/summary.json", "w") as f:
+        f.write(json.dumps(summary_dict, indent=4))
 
     _save_eval_results_to_csv(eval_results, out_dir)
 
