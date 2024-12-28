@@ -2,6 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional, cast
 
 import google.genai as genai
@@ -156,6 +157,7 @@ class VLLMWrapper(OpenAIGenerationWrapper):
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
     def __init__(self, args: GenerationWrapperArgs) -> None:
+        super().__init__(args)
         api_key = args.dotenv.get("OPENROUTER_API_KEY")
         if api_key is None:
             raise ValueError(
@@ -256,6 +258,8 @@ class GeminiWrapper(GenerationWrapper):
 class RemoteModel(str, Enum):
     CLAUDE_3_5 = "claude-3-5"
     QWEN_QWQ = "qwen-qwq"
+    GPT_4O_MINI = "gpt-4o-mini"
+    MOCK = "mock"
 
 
 @dataclass
@@ -270,12 +274,16 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         GenerationWrapperArgs(model_id="qwen/qwq-32b-preview"),
     ),
     RemoteModel.CLAUDE_3_5: ModelConfig(AnthropicGenerationWrapper),
+    RemoteModel.GPT_4O_MINI: ModelConfig(
+        OpenAIGenerationWrapper, GenerationWrapperArgs(model_id="gpt-4o-mini")
+    ),
+    RemoteModel.MOCK: ModelConfig(MockGenerator),
 }
 
 
-def get_model_wrapper(model_name: str) -> GenerationWrapper:
+def get_generation_wrapper(model_name: str) -> GenerationWrapper:
     model_name_enum = RemoteModel(model_name)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    current_dir = Path(__file__).resolve().parent.parent
     dotenv: Dict[str, str] = dotenv_values(os.path.join(current_dir, ".env"))  # type: ignore
     hf_token = dotenv["HF_TOKEN"]
     logger.info(f"Logging in with token: {hf_token}")
@@ -283,4 +291,6 @@ def get_model_wrapper(model_name: str) -> GenerationWrapper:
     config = MODEL_CONFIGS[model_name_enum]
     if config.args is None:
         config.args = GenerationWrapperArgs(dotenv=dotenv)
+    else:
+        config.args.dotenv = dotenv
     return config.model(config.args)

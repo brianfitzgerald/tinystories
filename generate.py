@@ -12,7 +12,7 @@ from rich.console import Console
 from tqdm import tqdm
 
 from synthetic_data.generation import (
-    get_model_wrapper,
+    get_generation_wrapper,
     MockGenerator,
     RemoteModel,
     save_output_dataset,
@@ -23,11 +23,11 @@ from synthetic_data.utils import DatasetFormat
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 4,
+    batch_size: int = 1,
     restart: bool = False,
     resume_input_position: bool = True,
     model: str = RemoteModel.QWEN_QWQ.value,
-    task_name: str = "codecontests",
+    task_name: str = "codecontests_cot_sft",
     n_epochs: int = 5,
     **kwargs,
 ):
@@ -35,16 +35,6 @@ def main(
     Generate synthetic preference data from a given dataset.
     Inputs a seed dataset, that is either given from a CSV or HF dataset,
     or generated from a synthetic source, such as a list of subjects.
-
-    Args:
-    - upload_every_n_batches: int = 10: Upload the output dataset to the Hub every n batches.
-    - batch_size: int = 4: The batch size for generating completions.
-    - restart: bool = False: If True, start from an empty dataset.
-    - resume_input_position: bool = True: If True, resume generating from the last position in the input dataset.
-    - model: str = "openai": The model wrapper to use for generation.
-    - task_name: str = "codecontests": The task to generate data for.
-    - n_epochs: int = 5: The number of epochs to run the generation for.
-
     """
     assert not kwargs, f"Unrecognized arguments: {kwargs}"
 
@@ -52,7 +42,7 @@ def main(
     task = ALL_TASKS[task_name](console)
     split = task.seed_data_split
 
-    model_wrapper = get_model_wrapper(model)
+    generation_wrapper = get_generation_wrapper(model)
     output_dataset = Dataset.from_dict({k: [] for k in task.dataset_columns})
 
     logger.info("Loading output dataset...")
@@ -122,11 +112,8 @@ def main(
             batch = cast(Dict, batch)
             conversations_batch = task.format_input_conversation(batch)
 
-            if isinstance(task, CodeContests) and isinstance(
-                model_wrapper, MockGenerator
-            ):
-                # TODO add these when we have sample completions again
-                model_wrapper.set_mock_completions(
+            if isinstance(generation_wrapper, MockGenerator):
+                generation_wrapper.set_mock_completions(
                     [
                         f"def solution(problem_input):\n    return []"
                         for _ in range(len(conversations_batch))
@@ -137,7 +124,7 @@ def main(
                 f"Generating batch of {len(conversations_batch)} completions..."
             )
             try:
-                completions = asyncio.run(model_wrapper.generate(conversations_batch))
+                completions = asyncio.run(generation_wrapper.generate(conversations_batch))
             except TimeoutError:
                 logger.error(f"Timeout error on batch {batch_idx}")
                 continue

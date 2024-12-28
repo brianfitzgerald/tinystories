@@ -5,7 +5,6 @@ from typing import Dict, List, cast
 
 import pandas as pd
 from datasets import Dataset, load_dataset
-from dotenv import dotenv_values
 from fire import Fire
 from rich.console import Console
 from rich.progress import Progress
@@ -18,11 +17,9 @@ from evaluation.code_execution import (
     evaluate_codecontests,
 )
 from synthetic_data.generation import (
-    MODEL_CONFIGS,
     RemoteModel,
     GenerationWrapper,
-    GenerationWrapperArgs,
-    get_model_wrapper,
+    get_generation_wrapper,
 )
 from synthetic_data.tasks import ALL_TASKS
 from synthetic_data.utils import Conversation, dictl, ensure_directory
@@ -60,7 +57,7 @@ async def main(
     task = ALL_TASKS[task_name](console)
 
     console = Console()
-    model_wrapper = get_model_wrapper(gen_source)
+    model_wrapper = get_generation_wrapper(gen_source)
 
     simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
     random_id = int(random.random() * 1000)

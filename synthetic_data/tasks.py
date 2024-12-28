@@ -133,19 +133,24 @@ class Toolformer(DPOTask):
 
     original_rows_batch: List[ToolFormerRow] = []
 
-    def format_output_rows(self, completions_batch: List[str]) -> Dict:
-        for completion in completions_batch:
+    def format_output_rows(self, completions: List[str]) -> List[Dict]:
+        row = None
+        for completion in completions:
             question, tool_call, call_result, agent_output = get_matches(completion)
             row = ToolFormerRow(question, tool_call, call_result, agent_output)
 
             assert is_valid_python(row.call_result)
             assert is_valid_python(row.tool_call)
 
-        return {
-            "call_result": row.call_result,
-            "tool_call": row.tool_call,
-            "agent_output": row.agent_output,
-        }
+        assert row is not None
+
+        return [
+            {
+                "call_result": row.call_result,
+                "tool_call": row.tool_call,
+                "agent_output": row.agent_output,
+            }
+        ]
 
     # TODO re add the original row to the input conv
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
@@ -268,12 +273,10 @@ class SyntheticToolCalls(DPOTask):
         return conversations_batch
 
     # TODO fix
-    def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
+    def format_output_rows(self, completions: List[str]) -> List[Dict]:
         # Get completions for each prompt, rank, and choos the 2 highest
         new_rows_batch = []
-        for completion, original_row in zip(
-            completions_batch, self.original_rows_batch
-        ):
+        for completion, original_row in zip(completions, self.original_rows_batch):
             try:
                 tool_call, call_result, agent_output = get_matches(completion)
 
@@ -384,9 +387,9 @@ class SquadExtractiveQA(BaseTask):
             format_entity_extraction_conversation_template(prompt) for prompt in prompts
         ]
 
-    def format_output_rows(self, completions_batch: List[str]) -> List[Dict]:
+    def format_output_rows(self, completions: List[str]) -> List[Dict]:
         parsed_rows: List[ExtractiveQARow] = []
-        for i, completion in enumerate(completions_batch):
+        for i, completion in enumerate(completions):
             blocks = extract_code_block(completion)
             if len(blocks) != 2:
                 logger.warning(f"Could not extract JSON from completion: {completion}")
@@ -487,7 +490,7 @@ class HumanEval(DPOTask):
         return self.input_conversations
 
     def format_output_rows(self, completions: List[str]) -> List[Dict]:
-        res = []
+        res, err, j = [], None, 0
         for i, completions_for_sample in enumerate(
             chunk_list(completions, self.n_completions_per_sample)
         ):
@@ -528,6 +531,8 @@ class PositiveMode(Enum):
     BEST_OF_N = "best_of_n"
     # Use the reference completion from codecontests
     REFERENCE_COMPLETION = "reference_completion"
+    # Don't use a reference completion, instead return all completions as a list
+    NO_COMPARISON = "no_comparison"
 
 
 class CodeContests(HumanEval):
@@ -548,13 +553,13 @@ class CodeContests(HumanEval):
             "exec",
             "test",
         ),
-        # EvalTask(
-        #     "humaneval",
-        #     "google-research-datasets/mbpp",
-        #     "mbpp",
-        #     "ast",
-        #     "train",
-        # ),
+        EvalTask(
+            "humaneval",
+            "google-research-datasets/mbpp",
+            "mbpp",
+            "ast",
+            "train",
+        ),
     ]
 
     def __init__(self, console: Console) -> None:
@@ -611,6 +616,7 @@ class CodeContests(HumanEval):
         for i, completions_for_sample in enumerate(
             chunk_list(completions, self.n_completions_per_sample)
         ):
+            # Iterate through all completions, evaluate them and choose a positive and negative completion
             problem = self.problems[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
@@ -668,19 +674,37 @@ class CodeContests(HumanEval):
                     worst_completion = completion
                     best_score = 1
                     worst_score = 0
-            if self.positive_completion_mode == PositiveMode.BEST_OF_N:
-                logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
-            res.append(
-                {
-                    "chosen": best_completion,
-                    "chosen_score": best_score,
-                    "rejected": worst_completion,
-                    "rejected_score": worst_score,
-                    "name": problem.name,
-                    "description": problem.description,
-                }
-            )
+            if self.positive_completion_mode == PositiveMode.NO_COMPARISON:
+                res.append(
+                    {
+                        "completions": completions_for_sample,
+                    }
+                )
+            else:
+                if self.positive_completion_mode == PositiveMode.BEST_OF_N:
+                    logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
+                res.append(
+                    {
+                        "chosen": best_completion,
+                        "chosen_score": best_score,
+                        "rejected": worst_completion,
+                        "rejected_score": worst_score,
+                        "name": problem.name,
+                        "description": problem.description,
+                    }
+                )
         return res
+
+
+class CodeContestsCoTSFT(CodeContests):
+    output_dataset_name = "codecontests_cot_sft"
+    dataset_columns = ["completions", "test_results", "name"]
+
+    def __init__(self, console: Console) -> None:
+        super().__init__(console)
+        self.n_completions_per_sample = 1
+        self.positive_completion_mode = PositiveMode.BEST_OF_N
+
 
 
 ALL_TASKS: Dict[str, type[BaseTask]] = {
@@ -692,4 +716,5 @@ ALL_TASKS: Dict[str, type[BaseTask]] = {
     "goody": Goody2,
     "humaneval": HumanEval,
     "codecontests": CodeContests,
+    "codecontests_cot_sft": CodeContestsCoTSFT,
 }
