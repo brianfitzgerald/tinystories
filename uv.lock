@@ -2931,7 +2931,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "bitsandbytes", marker = "sys_platform == 'linux'" },
     { name = "datacommons" },
     { name = "datacommons-pandas" },
     { name = "datasets" },
@@ -2939,7 +2938,6 @@ dependencies = [
     { name = "evaluate" },
     { name = "fastapi" },
     { name = "fire" },
-    { name = "flash-attn", marker = "sys_platform == 'linux'" },
     { name = "fsspec" },
     { name = "google-genai" },
     { name = "gradio", version = "3.36.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -2981,10 +2979,16 @@ dependencies = [
     { name = "wrapt-timeout-decorator" },
 ]
 
+[package.optional-dependencies]
+flash-attn = [
+    { name = "bitsandbytes", marker = "sys_platform == 'linux'" },
+    { name = "flash-attn", marker = "sys_platform == 'linux'" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anthropic" },
-    { name = "bitsandbytes", marker = "sys_platform == 'linux'", specifier = ">=0.44.1" },
+    { name = "bitsandbytes", marker = "sys_platform == 'linux' and extra == 'flash-attn'", specifier = ">=0.44.1" },
     { name = "datacommons" },
     { name = "datacommons-pandas", specifier = ">=0.0.3" },
     { name = "datasets" },
@@ -2992,7 +2996,7 @@ requires-dist = [
     { name = "evaluate" },
     { name = "fastapi", specifier = ">=0.115.5" },
     { name = "fire" },
-    { name = "flash-attn", marker = "sys_platform == 'linux'", specifier = ">=2.7.0.post2" },
+    { name = "flash-attn", marker = "sys_platform == 'linux' and extra == 'flash-attn'", specifier = ">=2.7.0.post2" },
     { name = "fsspec", specifier = "==2023.10.0" },
     { name = "google-genai", specifier = ">=0.2.0" },
     { name = "gradio" },
