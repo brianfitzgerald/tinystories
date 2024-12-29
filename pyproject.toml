@@ -41,7 +41,7 @@ dependencies = [
     "pyright>=1.1.390",
     "google-genai>=0.2.0",
     # pytorch deps
-    "transformers==4.46.2",
+    "transformers==4.47.1",
     "torch==2.5.1",
     "torchaudio==2.5.1",
     "torchvision==0.20.1",
@@ -50,10 +50,6 @@ dependencies = [
     "sentencepiece",
     "einops",
     # add vllm if needed for evals
-]
-
-[project.optional-dependencies]
-flash-attn = [
     "flash-attn>=2.7.0.post2; sys_platform == 'linux'",
     "bitsandbytes>=0.44.1; sys_platform == 'linux'",
 ]

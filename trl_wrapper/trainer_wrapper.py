@@ -193,7 +193,7 @@ class TrainerWrapper:
         if comment is not None:
             run_name += f"-{comment}"
 
-        output_dir = f"runs/{run_name}"
+        output_dir = f"/weka/home-brianf/runs/{run_name}"
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 
