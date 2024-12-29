@@ -21,7 +21,7 @@ from synthetic_data.utils import DatasetFormat
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 4,
+    batch_size: int = 16,
     restart: bool = False,
     resume_input_position: bool = True,
     model: str = RemoteModel.DEEPSEEK_V3.value,
@@ -80,16 +80,21 @@ def main(
         f"Loading input dataset: {input_dataset_location}, format: {task.seed_data_format.value}"
     )
     assert input_dataset_location
-    if task.seed_data_format in (DatasetFormat.HF_DATASET, DatasetFormat.SYNTHETIC):
-        if len(output_dataset) > 0 and resume_input_position:
-            logger.info(f"Resuming from position {len(output_dataset)}")
-            split = f"{split}[{len(output_dataset)}:]"
+    split = None
+    if len(output_dataset) > 0 and resume_input_position:
+        logger.info(f"Resuming from position {len(output_dataset)}")
+        split = f"{split}[{len(output_dataset)}:]"
+    if task.seed_data_format == DatasetFormat.HF_DATASET:
         input_dataset = cast(Dataset, load_dataset(input_dataset_location, split=split))
     elif task.seed_data_format == DatasetFormat.TSV:
         seed_data = pd.read_csv(input_dataset_location, on_bad_lines="skip")
         input_dataset = Dataset.from_pandas(seed_data)
     elif task.seed_data_format == DatasetFormat.PARQUET:
-        input_dataset = Dataset.from_parquet(input_dataset_location)  # type: ignore
+        input_dataset_pd = pd.read_parquet(input_dataset_location)
+        if len(output_dataset) > 0 and resume_input_position:
+            input_dataset = Dataset.from_pandas(input_dataset_pd.iloc[len(output_dataset) :])
+        else:
+            input_dataset = Dataset.from_pandas(input_dataset_pd)
     else:
         raise ValueError(f"Unrecognized seed_data_format: {task.seed_data_format}")
 

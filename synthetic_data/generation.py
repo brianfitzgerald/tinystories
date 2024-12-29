@@ -55,6 +55,7 @@ class GenWrapperArgs:
     model_id: Optional[str] = None
     lora_name: Optional[str] = None
     dotenv: dict[str, str] = field(default_factory=dict)
+    max_concurrent: int = 8
 
 
 class GenerationWrapper(ABC):
@@ -95,12 +96,12 @@ MAX_RETRIES = 3
 
 class OpenAIGenerationWrapper(GenerationWrapper):
     def __init__(self, args: GenWrapperArgs) -> None:
+        super().__init__(args)
         api_key = args.dotenv.get("OPENAI_API_KEY")
         if api_key is None:
             raise ValueError("OPENAI_API_KEY is required for OpenAIGenerationWrapper")
         self.oai_client = AsyncOpenAI(api_key=api_key)
         self.model_name = args.model_id or "gpt-4o-mini"
-        self.max_concurrent = 8
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
         self.max_tokens = 4096
@@ -120,10 +121,10 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                 completion_requests.append(request)
             try:
                 logger.info(
-                    f"Generating {len(completion_requests)} requests with {self.model_name}, max concurrent: {self.max_concurrent}"
+                    f"Generating {len(completion_requests)} requests with {self.model_name}, max concurrent: {self.args.max_concurrent}"
                 )
                 results: List[ChatCompletion] = await gather_with_concurrency_limit(
-                    self.max_concurrent, *completion_requests
+                    self.args.max_concurrent, *completion_requests
                 )
                 if not results:
                     logger.error(results)
@@ -151,7 +152,6 @@ class VLLMWrapper(OpenAIGenerationWrapper):
         self.oai_client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
         )
-        self.max_concurrent = 4
         self.temperature = 0.4
 
 
@@ -167,7 +167,6 @@ class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
         )
-        self.max_concurrent = 4
         self.temperature = 0.4
 
 
@@ -276,7 +275,7 @@ MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
     ),
     RemoteModel.DEEPSEEK_V3: RemoteModelChoice(
         OpenRouterGenerationWrapper,
-        GenWrapperArgs(model_id="deepseek/deepseek-chat"),
+        GenWrapperArgs(model_id="deepseek/deepseek-chat", max_concurrent=16),
     ),
     RemoteModel.CLAUDE_3_5: RemoteModelChoice(AnthropicGenerationWrapper),
     RemoteModel.GPT_4O_MINI: RemoteModelChoice(
