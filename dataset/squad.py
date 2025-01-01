@@ -33,8 +33,6 @@ def format_squad_extractive(sample: dict) -> Tuple[str, str]:
     return input_out, labels_out
 
 
-
-
 class SquadExtractiveQADataModule(SmDataset):
     def __init__(
         self,
@@ -59,16 +57,12 @@ class SquadExtractiveQADataModule(SmDataset):
 
 
 class SquadDataModule(SmDataset):
-
     def __init__(
         self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
+        *args,
     ):
-        super().__init__(batch_size, tokenizer, max_token_length)
-
-        self.cache_dir = f"dataset_caches/squad_len_{max_token_length}"
+        super().__init__(*args)
+        self.cache_dir = f"dataset_caches/squad_len_{self.max_token_length}"
         self.dataset_name = "rajpurkar/squad_v2"
 
     def process_samples_batch(self, samples: LazyBatch):
@@ -87,7 +81,6 @@ class SquadDataModule(SmDataset):
 
 
 class DollyEntityExtractionDataModule(SmDataset):
-
     def __init__(
         self,
         batch_size: int,
@@ -128,8 +121,15 @@ class DollyEntityExtractionDataModule(SmDataset):
                 }
             ]
 
-            prompt_ids: Tensor = self.tokenizer.apply_chat_template(conversation, tokenize=True, return_tensors="pt", add_generation_prompt=True)[0]  # type: ignore
-            input_ids: Tensor = self.tokenizer.apply_chat_template(conversation_completion, tokenize=True, return_tensors="pt")[0]  # type: ignore
+            prompt_ids: Tensor = self.tokenizer.apply_chat_template(
+                conversation,
+                tokenize=True,
+                return_tensors="pt",
+                add_generation_prompt=True,
+            )[0]  # type: ignore
+            input_ids: Tensor = self.tokenizer.apply_chat_template(
+                conversation_completion, tokenize=True, return_tensors="pt"
+            )[0]  # type: ignore
 
             user_prompt_len = prompt_ids.shape[0]
             labels = torch.tensor(

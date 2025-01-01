@@ -56,7 +56,9 @@ class PromptUpsampleDataModule(SmDataset):
 
         # Load dataset and split
         # dataset = load_dataset("parquet", data_files={"train": "parti_prompts.parquet"})["train"].train_test_split(test_size=0.01)  # type: ignore
-        dataset = load_dataset(self.dataset_name)["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset(self.dataset_name)["train"].train_test_split(
+            test_size=0.01
+        )  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 

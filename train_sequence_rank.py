@@ -33,7 +33,6 @@ class ContextPooler(nn.Module):
         self.act_fn = nn.GELU()
 
     def forward(self, hidden_states: T) -> T:
-
         # get the hidden_state of the first token
         context_token = hidden_states[:, 0]
         context_token = self.dropout(context_token)
@@ -96,7 +95,6 @@ tokenizer_kwargs = {
 
 
 def main(model_name="microsoft/deberta-v3-base", batch_size=64):
-
     input_df = pd.read_csv("data/train.csv")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -106,7 +104,6 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=64):
     os.makedirs("dataset_caches/sequence_rank", exist_ok=True)
 
     def tokenize_batch(batch: dict) -> dict:
-
         batch_out = {}
         for feature in TEXT_COLUMNS:
             feat_list = batch[feature]
@@ -182,7 +179,6 @@ def main(model_name="microsoft/deberta-v3-base", batch_size=64):
                 writer.add_scalar("val/loss", val_loss, global_step + j)
 
     for epoch in range(100):
-
         train_iter = tqdm(
             enumerate(train_loader), total=len(dataset["train"]) // batch_size
         )

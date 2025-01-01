@@ -49,7 +49,6 @@ class VitDataset(pl.LightningDataModule):
 
 
 class Cifar10Dataset(VitDataset):
-
     patch_size = 4
     n_classes = 10
 
@@ -68,8 +67,18 @@ class Cifar10Dataset(VitDataset):
 
         cache_dir = "dataset_caches/cifar10"
         self.dataset = load_dataset("uoft-cs/cifar10")
-        self.train_loader = DataLoader(self.dataset["train"], batch_size=self.batch_size, num_workers=self.proc_count, collate_fn=self._collate_fn)  # type: ignore
-        self.val_loader = DataLoader(self.dataset["test"], batch_size=self.batch_size, num_workers=self.proc_count, collate_fn=self._collate_fn)  # type: ignore
+        self.train_loader = DataLoader(
+            self.dataset["train"],
+            batch_size=self.batch_size,
+            num_workers=self.proc_count,
+            collate_fn=self._collate_fn,
+        )  # type: ignore
+        self.val_loader = DataLoader(
+            self.dataset["test"],
+            batch_size=self.batch_size,
+            num_workers=self.proc_count,
+            collate_fn=self._collate_fn,
+        )  # type: ignore
 
         ensure_directory(cache_dir, clear=False)
 
@@ -81,7 +90,6 @@ class Cifar10Dataset(VitDataset):
 
 
 class AestheticScoreDataset(VitDataset):
-
     COLUMNS = [
         "image_text_alignment_rating",
         "fidelity_rating",
@@ -114,7 +122,12 @@ class AestheticScoreDataset(VitDataset):
 
     def val_dataloader(self):
         # TODO fix train test split
-        return DataLoader(self.val_wds_loader, num_workers=self.proc_count, batch_size=8, collate_fn=self.collate_fn)  # type: ignore
+        return DataLoader(
+            self.val_wds_loader,
+            num_workers=self.proc_count,
+            batch_size=8,
+            collate_fn=self.collate_fn,
+        )  # type: ignore
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")

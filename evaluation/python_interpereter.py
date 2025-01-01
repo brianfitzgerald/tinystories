@@ -617,7 +617,9 @@ def evaluate_try(try_node, state, static_tools, custom_tools):
     except Exception as e:
         matched = False
         for handler in try_node.handlers:
-            if handler.type is None or isinstance(e, evaluate_ast(handler.type, state, static_tools, custom_tools)):  # type: ignore
+            if handler.type is None or isinstance(
+                e, evaluate_ast(handler.type, state, static_tools, custom_tools)
+            ):  # type: ignore
                 matched = True
                 if handler.name:
                     state[handler.name] = e
@@ -711,7 +713,9 @@ def import_modules(expression, state, authorized_imports):
         return None
     elif isinstance(expression, ast.ImportFrom):
         if check_module_authorized(expression.module):
-            module = __import__(expression.module, fromlist=[alias.name for alias in expression.names])  # type: ignore
+            module = __import__(
+                expression.module, fromlist=[alias.name for alias in expression.names]
+            )  # type: ignore
             for alias in expression.names:
                 state[alias.asname or alias.name] = getattr(module, alias.name)
         else:
@@ -813,7 +817,9 @@ def evaluate_ast(
         return evaluate_function_def(expression, state, static_tools, custom_tools)
     elif isinstance(expression, ast.Dict):
         # Dict -> evaluate all keys and values
-        keys = [evaluate_ast(k, state, static_tools, custom_tools) for k in expression.keys]  # type: ignore
+        keys = [
+            evaluate_ast(k, state, static_tools, custom_tools) for k in expression.keys
+        ]  # type: ignore
         values = [
             evaluate_ast(v, state, static_tools, custom_tools)
             for v in expression.values

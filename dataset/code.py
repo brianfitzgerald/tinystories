@@ -14,7 +14,6 @@ DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
 
 
 class CodeContestsDataModule(SmDataset):
-
     def load_dataset(self):
         # Load dataset and split
         dataset = Dataset.from_parquet("codecontests_dpo_v2_filtered.parquet")
@@ -67,7 +66,6 @@ def create_triplets(
 
 
 class UltraFeedbackDataModule(pl.LightningDataModule):
-
     def __init__(
         self,
         max_samples: Optional[int] = None,
@@ -101,14 +99,17 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
                 out_dict[response_role].append(triplets[response_role])
         return out_dict
 
+
 SFT_COLS = ["conversations"]
 
-class EvolCodeAlpacaDataModule(SmDataset):
 
+class EvolCodeAlpacaDataModule(SmDataset):
     def load_dataset(self):
         # Load dataset and split
         logger.info("Loading dataset")
-        dataset = load_dataset("AlekseyKorshuk/evol-codealpaca-v1-dpo")["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset("AlekseyKorshuk/evol-codealpaca-v1-dpo")[
+            "train"
+        ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -120,10 +121,10 @@ class EvolCodeAlpacaDataModule(SmDataset):
         }
         return batch_out
 
-    def process_samples_batch_sft(self, data):
+    def process_samples_batch_sft(self, examples):
         out = {k: [] for k in SFT_COLS}
-        for i in range(len(data["question"])):
-            system, question = data["system"][i], data["question"][i]
+        for i in range(len(examples["question"])):
+            system, question = examples["system"][i], examples["question"][i]
             conv = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": question},

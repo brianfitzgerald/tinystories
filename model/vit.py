@@ -191,7 +191,6 @@ class ViT(nn.Module):
         self.mlp_head = nn.Linear(dim, num_classes)
 
     def forward(self, img: Tensor) -> Tensor:
-
         x: Tensor = self.to_patch_embedding(img)
         b, n, _ = x.shape
 
@@ -235,7 +234,6 @@ class VisionTransformer(pl.LightningModule):
         self.image_size = dataset.image_size
 
     def _step(self, batch: dict):
-
         image = batch["image"]
         pred = self.model(image)
         score = batch["label"]

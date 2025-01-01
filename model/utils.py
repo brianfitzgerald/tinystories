@@ -100,7 +100,9 @@ class SmDataset(pl.LightningDataModule):
         prefix = ""
         if current_dir == "notebooks":
             prefix = "../"
-        self.cache_dir = f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}"
+        self.cache_dir = (
+            f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}"
+        )
         logger.info(f"Cache dir: {self.cache_dir}")
         self.input_column, self.target_column = "context", "fields"
         self.use_cache = use_cache
@@ -110,7 +112,9 @@ class SmDataset(pl.LightningDataModule):
 
     def load_dataset(self):
         # Load dataset and split
-        dataset = load_dataset("roborovski/squad-extractive-qa")["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset("roborovski/squad-extractive-qa")[
+            "train"
+        ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -196,7 +200,9 @@ class SmDataset(pl.LightningDataModule):
         }
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers)  # type: ignore
+        return DataLoader(
+            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+        )  # type: ignore
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=8, num_workers=self.num_workers)  # type: ignore

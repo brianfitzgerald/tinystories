@@ -106,7 +106,6 @@ class BaseTask(ABC):
 
 
 class DPOTask(BaseTask):
-
     n_dpo_completions: int = 2
 
 
@@ -537,7 +536,6 @@ class PositiveMode(Enum):
 
 
 class CodeContests(HumanEval):
-
     seed_data_format = DatasetFormat.PARQUET
     seed_data_location = "dataset_samples/codeforces_problems_subset.parquet"
     seed_data_split = "train"
