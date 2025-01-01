@@ -106,11 +106,18 @@ CODECONTESTS_CONFIG = WrapperConfig(
     wandb_project_name="codecontests-ministral-8b",
     train_batch_size=12,
     data_module_choice="evol_codealpaca_dpo",
-    n_epochs=10,
     using_mistral=True,
 )
 
-CODECONTESTS_SFT_CONFIG = replace(CODECONTESTS_CONFIG, tuning_mode="sft")
+CODECONTESTS_SFT_CONFIG = WrapperConfig(
+    model_id_or_path=MISTRAL_7B,
+    wandb_project_name="codecontests-ministral-8b",
+    train_batch_size=16,
+    data_module_choice="evol_codealpaca_dpo",
+    using_mistral=True,
+    tuning_mode="sft",
+    learning_rate=1e-5,
+)
 
 
 CONFIGS = {
@@ -122,17 +129,14 @@ CONFIGS = {
 
 
 class TrainerWrapper:
-
     def __init__(self, config: WrapperConfig, use_wandb: bool = False) -> None:
         self.config = config
         self.use_wandb = use_wandb
 
     def init_model(self):
-
         bnb_config = None
 
         if self.config.tuning_mode == "lora":
-
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_use_double_quant=True,
@@ -151,7 +155,9 @@ class TrainerWrapper:
             use_cache=not self.config.using_mistral,
         )
 
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(self.config.model_id_or_path)  # type: ignore
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
+            self.config.model_id_or_path
+        )  # type: ignore
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
         # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
         # self.model.resize_token_embeddings(len(self.tokenizer))
@@ -184,7 +190,6 @@ class TrainerWrapper:
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):
-
         # Get run name
         simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
         random_id = int(torch.rand(1) * 1000000)
@@ -278,7 +283,7 @@ class TrainerWrapper:
                 max_grad_norm=self.config.max_grad_norm,
                 warmup_ratio=0.1,
                 lr_scheduler_type="cosine",
-                logging_steps=10,
+                logging_steps=1,
                 save_steps=self.config.save_steps,
                 save_total_limit=2,
                 eval_strategy="steps",
@@ -328,8 +333,12 @@ class TrainerWrapper:
                 if os.path.exists(train_cache_location):
                     logger.info("Loading cached logprobs...")
                     # TODO add support for eval dataset
-                    self.trainer.train_dataset = load_dataset("parquet", data_files={"train": train_cache_location})["train"]  # type: ignore
-                    self.trainer.eval_dataset = load_dataset("parquet", data_files={"train": eval_cache_location})["train"]  # type: ignore
+                    self.trainer.train_dataset = load_dataset(
+                        "parquet", data_files={"train": train_cache_location}
+                    )["train"]  # type: ignore
+                    self.trainer.eval_dataset = load_dataset(
+                        "parquet", data_files={"train": eval_cache_location}
+                    )["train"]  # type: ignore
                     self.trainer._precomputed_train_ref_log_probs = True
                     self.trainer._precomputed_eval_ref_log_probs = True
                     logger.info("Loaded.")

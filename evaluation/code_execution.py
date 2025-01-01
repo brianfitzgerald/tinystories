@@ -192,9 +192,7 @@ ALLOWED_IMPORTS = LIST_SAFE_MODULES + [
 ]
 
 
-def evaluate_sample_ast(
-    full_code: str, n_asserts: int
-) -> Tuple[Optional[str], List]:
+def evaluate_sample_ast(full_code: str, n_asserts: int) -> Tuple[Optional[str], List]:
     """
     Evaluate a code snippet via the AST interpreter.
     Returns an error message and a list of test results.
@@ -216,13 +214,13 @@ def evaluate_sample_ast(
 class WriteOnlyStringIO(io.StringIO):
     """StringIO that throws an exception when it's read from"""
 
-    def read(self, *args, **kwargs): # type: ignore
+    def read(self, *args, **kwargs):  # type: ignore
         print(args, kwargs)
 
-    def readline(self, *args, **kwargs): # type: ignore
+    def readline(self, *args, **kwargs):  # type: ignore
         print(args, kwargs)
 
-    def readlines(self, *args, **kwargs): # type: ignore
+    def readlines(self, *args, **kwargs):  # type: ignore
         print(args, kwargs)
 
     def readable(self, *args, **kwargs):
@@ -370,9 +368,7 @@ def evaluate_codecontests(
             console.print(f"Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
             prompt = "" if sample.prompt == "text" else sample.prompt
-            exec_err, evaluation_results = evaluate_sample_ast(
-                full_code, n_asserts
-            )
+            exec_err, evaluation_results = evaluate_sample_ast(full_code, n_asserts)
             console.print(f"Generated solution:")
             print_code_snippet(generated_code, console)
             console.print(f"Test code:")
@@ -482,10 +478,12 @@ def _convert_mbpp_to_humaneval(sample: MBPPProblem) -> HumanEvalProblem:
         entry_point=sample.code,
     )
 
+
 @contextlib.contextmanager
 def time_limit(seconds: float):
     def signal_handler(signum, frame):
         raise TimeoutError("Timed out!")
+
     signal.setitimer(signal.ITIMER_REAL, seconds)
     signal.signal(signal.SIGALRM, signal_handler)
     try:
@@ -514,9 +512,7 @@ def evaluate_sample_against_codecontests_tests(
             err, execution_output = evaluate_sample_exec(completion, inputs_list)
         elif execution_mode == "ast":
             full_code = completion + "\n" + test_input
-            err, execution_output = evaluate_sample_ast(
-                full_code, len(expected_output)
-            )
+            err, execution_output = evaluate_sample_ast(full_code, len(expected_output))
         logger.info(
             f"Test output for completion: {execution_output}, expected: {expected_output}"
         )

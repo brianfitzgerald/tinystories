@@ -98,7 +98,9 @@ def main(
             if generate_samples:
                 for k, txt in enumerate([prompt, upsampled]):
                     print(f"Generating sample for: {txt}")
-                    image: Image.Image = pipe(txt, num_inference_steps=30, guidance_scale=20).images[0]  # type: ignore
+                    image: Image.Image = pipe(
+                        txt, num_inference_steps=30, guidance_scale=20
+                    ).images[0]  # type: ignore
                     prompt_fmt = format_filename(txt)
                     label = "prompt" if k == 0 else "upsampled"
                     image.save(f"{out_dir}/{i}_{j}_{k}_{label}_{prompt_fmt}_.png")

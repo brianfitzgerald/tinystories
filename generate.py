@@ -92,7 +92,9 @@ def main(
     elif task.seed_data_format == DatasetFormat.PARQUET:
         input_dataset_pd = pd.read_parquet(input_dataset_location)
         if len(output_dataset) > 0 and resume_input_position:
-            input_dataset = Dataset.from_pandas(input_dataset_pd.iloc[len(output_dataset) :])
+            input_dataset = Dataset.from_pandas(
+                input_dataset_pd.iloc[len(output_dataset) :]
+            )
         else:
             input_dataset = Dataset.from_pandas(input_dataset_pd)
     else:
@@ -127,7 +129,9 @@ def main(
                 f"Generating batch of {len(conversations_batch)} completions..."
             )
             try:
-                completions = asyncio.run(generation_wrapper.generate(conversations_batch))
+                completions = asyncio.run(
+                    generation_wrapper.generate(conversations_batch)
+                )
             except TimeoutError:
                 logger.error(f"Timeout error on batch {batch_idx}")
                 continue

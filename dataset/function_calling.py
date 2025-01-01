@@ -13,11 +13,12 @@ from synthetic_data.conversion import chatml_to_conversation
 
 
 class FunctionCallingDataModule(SmDataset):
-
     def setup(self, stage: Optional[str] = None):
         print(f"Loading dataset for stage {stage}")
 
-        dataset = load_dataset("glaiveai/glaive-function-calling-v2")["train"].train_test_split(test_size=0.01)  # type: ignore
+        dataset = load_dataset("glaiveai/glaive-function-calling-v2")[
+            "train"
+        ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
@@ -86,7 +87,9 @@ class FunctionCallingDataModule(SmDataset):
             attention_mask: Tensor = prompt_tokenized["attention_mask"].squeeze()  # type: ignore
             attention_mask = F.pad(attention_mask, (0, pad_amt), value=0)
 
-            expected_output_input_ids: Tensor = expected_output_tokenized["input_ids"].squeeze()  # type: ignore
+            expected_output_input_ids: Tensor = expected_output_tokenized[
+                "input_ids"
+            ].squeeze()  # type: ignore
 
             tokenized_prompt_len = prompt_input_ids.shape[0]
             ignore_labels = torch.full((tokenized_prompt_len,), IGNORE_TOKEN_INDEX)

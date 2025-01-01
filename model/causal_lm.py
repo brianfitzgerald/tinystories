@@ -24,7 +24,9 @@ class AutoLMFineTuner(SmModel):
         self.model: PreTrainedModel | PeftModel = AutoModelForCausalLM.from_pretrained(
             params.base_model_checkpoint, trust_remote_code=True
         )  # type: ignore
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(params.base_model_checkpoint)  # type: ignore
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
+            params.base_model_checkpoint
+        )  # type: ignore
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
@@ -42,7 +44,7 @@ class AutoLMFineTuner(SmModel):
                 task_type="CAUSAL_LM",
             )
             logger.info(f"Using DPO with LoraConfig: {self.peft_config}")
-            self.reference_model = create_reference_model(self.model) # type: ignore
+            self.reference_model = create_reference_model(self.model)  # type: ignore
             self.model = get_peft_model(self.model, self.peft_config)  # type: ignore
             self.bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -79,7 +81,10 @@ class AutoLMFineTuner(SmModel):
         elif self.tuning_type == "dpo":
             model_out_dict = {}
             for label in ["chosen", "rejected"]:
-                for model_name, model in [("reference", self.reference_model), ("policy", self.model)]:
+                for model_name, model in [
+                    ("reference", self.reference_model),
+                    ("policy", self.model),
+                ]:
                     model_out_dict[f"{model_name}_{label}"] = model(
                         input_ids=batch[f"{label}_input_ids"],
                         attention_mask=batch[f"{label}_attention_mask"],

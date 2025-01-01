@@ -23,7 +23,6 @@ EvalDataModeChoice = Literal["random", "fixed"]
 
 
 class CustomDPOTrainer(DPOTrainer):
-
     def set_custom_args(
         self,
         max_eval_sample_length: int,
@@ -126,7 +125,6 @@ class CustomDPOTrainer(DPOTrainer):
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
     ) -> EvalLoopOutput:
-
         # Sample and save to game log if requested (for one batch to save time)
         if self.generate_during_eval:
             # Generate random indices within the range of the total number of samples
@@ -145,7 +143,9 @@ class CustomDPOTrainer(DPOTrainer):
             random_batch = self._prepare_inputs(random_batch)
 
             logger.info("Generating samples...")
-            policy_output_decoded, ref_output_decoded = self.generate_from_model_and_ref(self.model, random_batch)  # type: ignore
+            policy_output_decoded, ref_output_decoded = (
+                self.generate_from_model_and_ref(self.model, random_batch)
+            )  # type: ignore
             logger.info("Generated samples.")
             prompt_decoded = self.processing_class.batch_decode(
                 random_batch["prompt_input_ids"],

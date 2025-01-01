@@ -67,7 +67,6 @@ def do_inference_gradio(
     device: torch.device,
     max_new_tokens: int = 1024,
 ):
-
     def generate(message: str, history: List):
         if not message:
             return

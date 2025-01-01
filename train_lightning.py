@@ -182,7 +182,6 @@ def main(
     run_name: Optional[str] = None,
     **kwargs,
 ):
-
     assert not kwargs, f"Unknown arguments: {kwargs}"
 
     load_dotenv(".env")

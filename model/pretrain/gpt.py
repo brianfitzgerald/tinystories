@@ -204,7 +204,6 @@ class CausalSelfAttention(nn.Module):
         mask: Optional[torch.Tensor] = None,
         input_pos: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-
         B, T, C = x.size()  # batch size, sequence length, embed_dim
 
         assert self.config.n_query_groups is not None
