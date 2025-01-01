@@ -1,7 +1,7 @@
 import os
-from dataclasses import dataclass, replace
-from typing import Literal, Optional, TypeVar
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 import torch
 from datasets import load_dataset
@@ -16,26 +16,24 @@ from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.utils.quantization_config import BitsAndBytesConfig
 from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
-from trl.trainer.sft_trainer import SFTTrainer
 from trl.trainer.sft_config import SFTConfig
-from trl.trainer.utils import DataCollatorForCompletionOnlyLM
+from trl.trainer.sft_trainer import SFTTrainer
 
 from dataset.code import (
     CodeContestsDataModule,
-    UltraFeedbackDataModule,
+    ConversationDataModule,
     EvolCodeAlpacaDataModule,
+    UltraFeedbackDataModule,
 )
 from model.utils import (
+    DataModuleChoice,
+    TuningModeChoice,
     ensure_directory,
     save_dataclass_to_json,
     short_hash,
-    TuningModeChoice,
-    DataModuleChoice,
-    OptimizerChoice,
 )
 from synthetic_data.utils import dictl
 from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
-
 
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
@@ -68,6 +66,8 @@ class WrapperConfig:
     wandb_project_name: str = "codecontests-llama-3b"
     n_epochs: int = 1
     max_eval_dataset_size: Optional[int] = None
+    # SFT only
+    train_on_inputs: bool = True
     # adapter to load before training
     adapter_path: Optional[str] = None
     dpo_beta: float = 0.1
@@ -119,12 +119,25 @@ CODECONTESTS_SFT_CONFIG = WrapperConfig(
     learning_rate=1e-5,
 )
 
+CODECONTESTS_COT_CONFIG = WrapperConfig(
+    model_id_or_path=MISTRAL_7B,
+    wandb_project_name="codecontests-ministral-8b",
+    train_batch_size=16,
+    data_module_choice="evol_codealpaca_dpo",
+    using_mistral=True,
+    tuning_mode="sft",
+    learning_rate=1e-5,
+    run_suffix="cot",
+)
+
+
 
 CONFIGS = {
     "llama": LLAMA_CONFIG,
     "dolphin": DOLPHIN_DPO_CONFIG,
     "codecontests": CODECONTESTS_CONFIG,
     "codecontests_sft": CODECONTESTS_SFT_CONFIG,
+    "codecontests_cot": CODECONTESTS_COT_CONFIG,
 }
 
 
@@ -185,8 +198,16 @@ class TrainerWrapper:
                 self.config.max_sequence_length,
                 self.config.tuning_mode,
             )
+        elif self.config.data_module_choice == "conversation":
+            self.data_module = ConversationDataModule(
+                self.config.train_batch_size,
+                self.tokenizer,
+                self.config.max_sequence_length,
+                self.config.tuning_mode,
+            )
         if self.config.notebook_mode:
             self.data_module.num_workers = 1
+            self.data_module.use_cache = False
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):
@@ -197,6 +218,8 @@ class TrainerWrapper:
         run_name = f"run-{simple_date}-{random_id}-{self.config.data_module_choice}-{self.config.tuning_mode}-{model_id_without_org}"
         if comment is not None:
             run_name += f"-{comment}"
+        if self.config.run_suffix is not None:
+            run_name += f"-{self.config.run_suffix}"
 
         output_dir = f"/weka/home-brianf/runs/{run_name}"
 
@@ -224,7 +247,7 @@ class TrainerWrapper:
             f"{self.data_module.cache_dir}/{model_id_hash}/ref_logprobs_cache"
         )
         logger.info(
-            f"Initializing trainer, run: {run_name}, project: {self.config.wandb_project_name}"
+            f"Initializing trainer, run_name: {run_name}, wandb project: {self.config.wandb_project_name}"
         )
         logger.info(
             f"logprobs cache location: {self.ref_logpbrobs_cache_location} peft config: {peft_config is not None}"

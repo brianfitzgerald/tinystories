@@ -1,24 +1,14 @@
 import json
-import os
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from datasets import load_dataset
-from datasets.arrow_dataset import Dataset
-from datasets.formatting.formatting import LazyBatch
-from loguru import logger
-from numpy import percentile
 from torch import Tensor
-from tqdm import tqdm
-from transformers.models.auto.modeling_auto import AutoModelForCausalLM
-from transformers.tokenization_utils import PreTrainedTokenizer
 from unidecode import unidecode
-import lightning.pytorch as pl
 
-from model.utils import IGNORE_TOKEN_INDEX, SmDataset, ensure_directory
+from model.utils import IGNORE_TOKEN_INDEX, SmDataset
 from synthetic_data.prompts import ENTITY_EXTRACTION_TUNING_INSTRUCTION
-from synthetic_data.utils import ShareGPTConversation, dictl, ldictl
+from synthetic_data.utils import ShareGPTConversation
 
 
 def format_squad_extractive(sample: dict) -> Tuple[str, str]:
@@ -36,19 +26,16 @@ def format_squad_extractive(sample: dict) -> Tuple[str, str]:
 class SquadExtractiveQADataModule(SmDataset):
     def __init__(
         self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
+        *args,
     ):
-        super().__init__(batch_size, tokenizer, max_token_length)
+        super().__init__(*args)
 
-        self.cache_dir = "dataset_caches/parti"
         self.dataset_name = "roborovski/squad-extractive-qa"
 
-    def process_samples_batch(self, samples: LazyBatch):
+    def process_samples_batch(self, examples):
         inputs, labels = [], []
-        for i in range(len(samples["id"])):  # type: ignore
-            sample = {k: v[i] for k, v in samples.items()}
+        for i in range(len(examples["id"])):  # type: ignore
+            sample = {k: v[i] for k, v in examples.items()}
             sample_input, sample_labels = format_squad_extractive(sample)
             inputs.append(sample_input)
             labels.append(sample_labels)
@@ -62,13 +49,12 @@ class SquadDataModule(SmDataset):
         *args,
     ):
         super().__init__(*args)
-        self.cache_dir = f"dataset_caches/squad_len_{self.max_token_length}"
         self.dataset_name = "rajpurkar/squad_v2"
 
-    def process_samples_batch(self, samples: LazyBatch):
+    def process_samples_batch(self, examples):
         inputs, labels = [], []
-        for i in range(len(samples["id"])):  # type: ignore
-            sample = {k: v[i] for k, v in samples.items()}
+        for i in range(len(examples["id"])):  # type: ignore
+            sample = {k: v[i] for k, v in examples.items()}
             answers = sample["answers"]["text"]
             sample_input = (
                 f"Question: {sample['question']}\nContext: {sample['context']}\n"
@@ -83,21 +69,17 @@ class SquadDataModule(SmDataset):
 class DollyEntityExtractionDataModule(SmDataset):
     def __init__(
         self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
+        *args,
     ):
-        super().__init__(batch_size, tokenizer, max_token_length)
+        super().__init__(*args)
 
-        self.cache_dir = f"dataset_caches/dolly_entity_extraction"
         self.dataset_name = "roborovski/dolly-entity-extraction"
         self.cpu_count = 1
-        self.max_token_length = max_token_length
 
-    def process_samples_batch(self, samples: LazyBatch):
+    def process_samples_batch(self, examples):
         input_ids_out, labels_out, attention_masks_out = [], [], []
-        for i in range(len(samples["context"])):  # type: ignore
-            sample = {k: v[i] for k, v in samples.items()}
+        for i in range(len(examples["context"])):  # type: ignore
+            sample = {k: v[i] for k, v in examples.items()}
 
             conversation: ShareGPTConversation = [
                 {

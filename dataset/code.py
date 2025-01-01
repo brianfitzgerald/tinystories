@@ -5,9 +5,10 @@ from datasets.arrow_dataset import Dataset
 from loguru import logger
 from transformers.tokenization_utils import PreTrainedTokenizer
 import lightning.pytorch as pl
+from trl import DataCollatorForCompletionOnlyLM
 
-from model.utils import SmDataset
-from synthetic_data.utils import dictl
+from model.utils import SmDataset, TuningModeChoice
+from synthetic_data.utils import dictl, ldictl
 
 
 DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
@@ -77,6 +78,7 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
         self.num_workers = 1
         # Not used
         self.cache_dir = "dataset_caches/ultrafeedback"
+        self.use_cache = False
 
     def setup(self, stage: Optional[str] = None):
         # TODO offline generate reference logps
@@ -113,7 +115,7 @@ class EvolCodeAlpacaDataModule(SmDataset):
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
 
-    def process_samples_batch(self, examples: dict):
+    def process_samples_batch(self, examples):
         batch_out = {
             "chosen": examples["chosen"],
             "rejected": examples["rejected"],
@@ -122,6 +124,9 @@ class EvolCodeAlpacaDataModule(SmDataset):
         return batch_out
 
     def process_samples_batch_sft(self, examples):
+        """
+        Convert to conversation format
+        """
         out = {k: [] for k in SFT_COLS}
         for i in range(len(examples["question"])):
             system, question = examples["system"][i], examples["question"][i]
@@ -131,3 +136,68 @@ class EvolCodeAlpacaDataModule(SmDataset):
             ]
             out["conversations"].append(conv)
         return out
+
+
+class ConversationDataModule(SmDataset):
+    """
+    Generic data module for conversation datasets.
+    """
+
+    def __init__(
+        self,
+        batch_size: int,
+        tokenizer: PreTrainedTokenizer,
+        max_token_length: int,
+        tuning_mode: TuningModeChoice,
+        max_samples: Optional[int] = None,
+        use_cache: bool = True,
+    ):
+        super().__init__(
+            batch_size, tokenizer, max_token_length, tuning_mode, max_samples, use_cache
+        )
+        self.collator = DataCollatorForCompletionOnlyLM(
+            "assistant", tokenizer=tokenizer
+        )
+
+    def load_dataset(self):
+        # Load dataset and split
+        logger.info("Loading dataset")
+        dataset = Dataset.from_parquet(
+            "../codecontests_cot_sft_formatted_thoughts_conversations.parquet"
+        )
+        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
+        self.train_dataset = dataset["train"]
+        self.val_dataset = dataset["test"]
+        self.messages_field = "conversation"
+
+    def post_setup(self):
+        self.train_dataset = self.train_dataset.remove_columns("conversation")
+        self.val_dataset = self.val_dataset.remove_columns("conversation")
+
+    def process_samples_batch_sft(self, examples: dict):
+        if isinstance(examples[self.messages_field][0], list):
+            output_texts = []
+            for i in range(len(examples[self.messages_field])):
+                output_texts.append(
+                    self.tokenizer.apply_chat_template(
+                        examples[self.messages_field][i], tokenize=False
+                    )
+                )
+            sample_batch = output_texts
+        else:
+            sample_batch = self.tokenizer.apply_chat_template(
+                examples[self.messages_field], tokenize=False
+            )
+
+        tokenized_out = []
+        for s in sample_batch:
+            s = self.tokenizer(
+                s,
+                padding="max_length",
+                truncation=True,
+                return_special_tokens_mask=True,
+            )
+            tokenized_out.append(s)
+
+        dict_out = self.collator(tokenized_out)
+        return dict_out

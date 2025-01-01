@@ -5,7 +5,7 @@ import shutil
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 import re
 
 import lightning.pytorch as pl
@@ -24,7 +24,7 @@ IGNORE_TOKEN_INDEX = -100
 PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
-DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo"]
+DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation"]
 TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora", "sft"]
 
 
@@ -109,10 +109,12 @@ class SmDataset(pl.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.tuning_mode: TuningModeChoice = tuning_mode
+        self.dataset_name = None
 
     def load_dataset(self):
         # Load dataset and split
-        dataset = load_dataset("roborovski/squad-extractive-qa")[
+        assert self.dataset_name is not None, "Dataset name must be set, or override load_dataset"
+        dataset = load_dataset(self.dataset_name)[
             "train"
         ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -169,6 +171,9 @@ class SmDataset(pl.LightningDataModule):
             logger.warning(
                 f"Columns in dataset: {self.train_dataset.column_names} do not match torch columns, not setting format"
             )
+
+    def post_setup(self):
+        pass
 
     def process_samples_batch(self, examples: dict):
         return self._tokenize(examples[self.input_column], examples[self.target_column])
