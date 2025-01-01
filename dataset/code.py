@@ -6,9 +6,11 @@ from loguru import logger
 from transformers.tokenization_utils import PreTrainedTokenizer
 import lightning.pytorch as pl
 from trl import DataCollatorForCompletionOnlyLM
+from rich.text import Text
+import torch.nn.functional as F
 
 from model.utils import SmDataset, TuningModeChoice
-from synthetic_data.utils import dictl, ldictl
+from synthetic_data.utils import dictl
 
 
 DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
@@ -201,3 +203,21 @@ class ConversationDataModule(SmDataset):
 
         dict_out = self.collator(tokenized_out)
         return dict_out
+
+    def visualize_sample(self, input_dict) -> Text:
+        input_ids = input_dict["input_ids"]
+        attention_mask = input_dict["attention_mask"]
+        attention_mask = F.pad(
+            attention_mask,
+            (0, input_dict["attention_mask"].shape[0] - attention_mask.size(0)),
+        )
+
+        rich_text = Text()
+
+        for token, mask in zip(input_ids, attention_mask):
+            decoded = self.tokenizer.decode(token)
+            if mask == 1:
+                rich_text.append(decoded, style="bright_green")
+            else:
+                rich_text.append(decoded, style="bright_red")
+        return rich_text
