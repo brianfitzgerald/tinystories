@@ -191,46 +191,37 @@ class ConversationDataModule(SmDataset):
         tokenized_batch = []
         for all_turns in conversations:
             all_but_last_turn = all_turns[:-1]
-            input_ids = self._tokenize_conversation(all_but_last_turn)
+            prompt_ids = self._tokenize_conversation(all_but_last_turn)
             all_turn_ids = self._tokenize_conversation(all_turns)
             tokenized_prompt = {}
-            input_ids = all_turn_ids + input_ids[len(input_ids) :]
-            tokenized_prompt["input_ids"] = input_ids
-            tokenized_prompt["attention_mask"] = [1] * len(input_ids)
+            tokenized_prompt["input_ids"] = prompt_ids
+            tokenized_prompt["attention_mask"] = [1] * len(prompt_ids)
 
             if not self.train_on_inputs:
-                user_prompt_len = len(input_ids)
-                labels = [-100] * user_prompt_len + input_ids[user_prompt_len:]
+                user_prompt_len = len(prompt_ids)
+                input_ids = prompt_ids + all_turn_ids[user_prompt_len:]
+                labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]
             else:
-                labels = input_ids
+                input_ids = all_turn_ids
+                labels = prompt_ids
 
             tokenized_prompt["labels"] = labels
+            tokenized_prompt["input_ids"] = input_ids
+
             tokenized_batch.append(tokenized_prompt)
 
         batch = ldictl(tokenized_batch)
         return batch
 
-    def find_first_eos_token(self, input_ids, start_idx):
-        eos_token_id = self.tokenizer.eos_token_id
-        for i in range(start_idx, len(input_ids)):
-            if input_ids[i] == eos_token_id:
-                return i
-        return -1
-
     def visualize_sample(self, input_dict) -> Text:
-        input_ids = input_dict["input_ids"]
-        labels = input_dict["labels"]
-        labels = F.pad(
-            labels,
-            (0, input_dict["labels"].shape[0] - labels.size(0)),
-        )
+        input_ids = input_dict["input_ids"].squeeze().tolist()
+        labels = input_dict["labels"].squeeze().tolist()
 
         rich_text = Text()
 
-        for token, mask in zip(input_ids, labels.tolist()):
+        for token, label in zip(input_ids, labels):
             decoded = self.tokenizer.decode(token)
-            print(mask)
-            if mask == 1:
+            if label == 0 or label == -100:
                 rich_text.append(decoded, style="bright_green")
             else:
                 rich_text.append(decoded, style="bright_red")
