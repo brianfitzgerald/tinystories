@@ -183,7 +183,7 @@ class ConversationDataModule(SmDataset):
 
     def _tokenize_conversation(self, conversation: Conversation):
         return self.tokenizer.apply_chat_template(
-            conversation, # type: ignore
+            conversation,  # type: ignore
             padding=True,
         )
 
@@ -191,18 +191,12 @@ class ConversationDataModule(SmDataset):
         tokenized_batch = []
         for all_turns in conversations:
             all_but_last_turn = all_turns[:-1]
-            tokenized_input = self._tokenize_conversation(all_but_last_turn)
-            tokenized_all_turns = self._tokenize_conversation(all_turns)
+            input_ids = self._tokenize_conversation(all_but_last_turn)
+            all_turn_ids = self._tokenize_conversation(all_turns)
             tokenized_prompt = {}
-            if isinstance(tokenized_input, list):
-                input_ids = (
-                    tokenized_all_turns + tokenized_input[len(tokenized_input) :]
-                )
-                tokenized_prompt["input_ids"] = input_ids
-                tokenized_prompt["attention_mask"] = [1] * len(input_ids)
-            else:
-                input_ids = tokenized_input["input_ids"]
-                tokenized_prompt = tokenized_input
+            input_ids = all_turn_ids + input_ids[len(input_ids) :]
+            tokenized_prompt["input_ids"] = input_ids
+            tokenized_prompt["attention_mask"] = [1] * len(input_ids)
 
             if not self.train_on_inputs:
                 user_prompt_len = len(input_ids)
@@ -225,16 +219,17 @@ class ConversationDataModule(SmDataset):
 
     def visualize_sample(self, input_dict) -> Text:
         input_ids = input_dict["input_ids"]
-        attention_mask = input_dict["attention_mask"]
-        attention_mask = F.pad(
-            attention_mask,
-            (0, input_dict["attention_mask"].shape[0] - attention_mask.size(0)),
+        labels = input_dict["labels"]
+        labels = F.pad(
+            labels,
+            (0, input_dict["labels"].shape[0] - labels.size(0)),
         )
 
         rich_text = Text()
 
-        for token, mask in zip(input_ids, attention_mask):
+        for token, mask in zip(input_ids, labels.tolist()):
             decoded = self.tokenizer.decode(token)
+            print(mask)
             if mask == 1:
                 rich_text.append(decoded, style="bright_green")
             else:
