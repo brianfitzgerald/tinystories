@@ -626,7 +626,7 @@ class CodeContests(HumanEval):
             problem = self.problems[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
-            self.console.print(completions[0])
+            self.console.print(completions_for_sample[0])
             if self.positive_completion_mode != PositiveMode.NO_COMPARISON:
                 for j, completion in enumerate(completions_for_sample):
                     if not completion:
@@ -685,17 +685,8 @@ class CodeContests(HumanEval):
                         worst_completion = completion
                         best_score = 1
                         worst_score = 0
-            if self.positive_completion_mode == PositiveMode.NO_COMPARISON:
-                res.append(
-                    {
-                        "completions": completions,
-                        "name": problem.name,
-                        "problem": problem.description,
-                    }
-                )
-            else:
                 if self.positive_completion_mode == PositiveMode.BEST_OF_N:
-                    logger.info(f"Adding row, best: {best_score}, worst: {worst_score}")
+                    logger.info(f"Adding row, best score: {best_score}, worst score: {worst_score}")
                 res.append(
                     {
                         "chosen": best_completion,
@@ -706,11 +697,19 @@ class CodeContests(HumanEval):
                         "description": problem.description,
                     }
                 )
+            else:
+                res.append(
+                    {
+                        "completions": completions_for_sample,
+                        "name": problem.name,
+                        "problem": problem.description,
+                    }
+                )
         return res
 
 
 class CodeContestsCoTSFT(CodeContests):
-    output_dataset_name = "codecontests_cot_sft"
+    output_dataset_name = "codecontests_cot_sft_v2"
     dataset_columns = ["completions", "test_results", "name"]
 
     def __init__(self, console: Console) -> None:

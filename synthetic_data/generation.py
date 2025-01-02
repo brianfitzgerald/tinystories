@@ -279,7 +279,7 @@ MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
     ),
     RemoteModel.CLAUDE_3_5: RemoteModelChoice(AnthropicGenerationWrapper),
     RemoteModel.GPT_4O_MINI: RemoteModelChoice(
-        OpenAIGenerationWrapper, GenWrapperArgs(model_id="gpt-4o-mini")
+        OpenAIGenerationWrapper, GenWrapperArgs(model_id="gpt-4o-mini", max_concurrent=16)
     ),
     RemoteModel.MOCK: RemoteModelChoice(MockGenerator),
 }

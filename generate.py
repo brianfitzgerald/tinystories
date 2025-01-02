@@ -21,10 +21,10 @@ from synthetic_data.utils import DatasetFormat
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 8,
+    batch_size: int = 16,
     restart: bool = False,
     resume_input_position: bool = True,
-    model: str = RemoteModel.DEEPSEEK_V3.value,
+    model: str = RemoteModel.GPT_4O_MINI.value,
     task_name: str = "codecontests_cot_sft",
     n_epochs: int = 5,
     **kwargs,
@@ -120,7 +120,7 @@ def main(
             if isinstance(generation_wrapper, MockGenerator):
                 generation_wrapper.set_mock_completions(
                     [
-                        f"def solution(problem_input):\n    return []"
+                        "def solution(problem_input):\n    return []"
                         for _ in range(len(conversations_batch))
                     ]
                 )
