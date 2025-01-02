@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
@@ -10,7 +10,7 @@ from rich.text import Text
 import torch.nn.functional as F
 
 from model.utils import SmDataset, TuningModeChoice
-from synthetic_data.utils import dictl
+from synthetic_data.utils import dictl, Conversation, ldictl
 
 
 DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
@@ -166,7 +166,7 @@ class ConversationDataModule(SmDataset):
         # Load dataset and split
         logger.info("Loading dataset")
         dataset = Dataset.from_parquet(
-            "../codecontests_cot_sft_formatted_thoughts_conversations.parquet"
+            "codecontests_cot_sft_formatted_thoughts_conversations.parquet"
         )
         dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -178,51 +178,43 @@ class ConversationDataModule(SmDataset):
         self.val_dataset = self.val_dataset.remove_columns("conversation")
 
     def process_samples_batch_sft(self, examples: dict):
-        if isinstance(examples[self.messages_field][0], list):
-            output_texts = []
-            for i in range(len(examples[self.messages_field])):
-                output_texts.append(
-                    self.tokenizer.apply_chat_template(
-                        examples[self.messages_field][i], tokenize=False
-                    )
-                )
-            sample_batch = output_texts
-        else:
-            sample_batch = self.tokenizer.apply_chat_template(
-                examples[self.messages_field], tokenize=False
-            )
-
-        out = self.tokenize_conversation(sample_batch)
+        out = self.tokenize_conversation(examples["conversation"])
         return out
 
-    def tokenize_conversation(self, conversations):
+    def _tokenize_conversation(self, conversation: Conversation):
+        return self.tokenizer.apply_chat_template(
+            conversation, # type: ignore
+            padding=True,
+        )
+
+    def tokenize_conversation(self, conversations: List[Conversation]):
         tokenized_batch = []
-        for turns in conversations:
-            prompt_ids = self.tokenizer(
-                turns,
-                padding="max_length",
-                truncation=True,
-                return_special_tokens_mask=True,
-            )
-            tokenized_res = turns[:-1]
+        for all_turns in conversations:
+            all_but_last_turn = all_turns[:-1]
+            tokenized_input = self._tokenize_conversation(all_but_last_turn)
+            tokenized_all_turns = self._tokenize_conversation(all_turns)
             tokenized_prompt = {}
-            if isinstance(tokenized_res, list):
-                input_ids = prompt_ids + tokenized_res[len(prompt_ids) :]
+            if isinstance(tokenized_input, list):
+                input_ids = (
+                    tokenized_all_turns + tokenized_input[len(tokenized_input) :]
+                )
                 tokenized_prompt["input_ids"] = input_ids
                 tokenized_prompt["attention_mask"] = [1] * len(input_ids)
             else:
-                input_ids = tokenized_res["input_ids"]
-                tokenized_prompt = tokenized_res
+                input_ids = tokenized_input["input_ids"]
+                tokenized_prompt = tokenized_input
 
             if not self.train_on_inputs:
-                user_prompt_len = len(prompt_ids)
+                user_prompt_len = len(input_ids)
                 labels = [-100] * user_prompt_len + input_ids[user_prompt_len:]
             else:
                 labels = input_ids
 
             tokenized_prompt["labels"] = labels
+            tokenized_batch.append(tokenized_prompt)
 
-        return tokenized_batch
+        batch = ldictl(tokenized_batch)
+        return batch
 
     def find_first_eos_token(self, input_ids, start_idx):
         eos_token_id = self.tokenizer.eos_token_id

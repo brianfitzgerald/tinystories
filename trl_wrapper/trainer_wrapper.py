@@ -146,6 +146,18 @@ class TrainerWrapper:
         self.config = config
         self.use_wandb = use_wandb
 
+        # Init tokenizer here so we can use it without loading the model
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
+            self.config.model_id_or_path
+        )  # type: ignore
+        # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
+        # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
+        # self.model.resize_token_embeddings(len(self.tokenizer))
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
+        self.tokenizer.truncation_side = "left"
+
+
     def init_model(self):
         bnb_config = None
 
@@ -167,16 +179,6 @@ class TrainerWrapper:
             ignore_mismatched_sizes=True,
             use_cache=not self.config.using_mistral,
         )
-
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
-            self.config.model_id_or_path
-        )  # type: ignore
-        # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
-        # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
-        # self.model.resize_token_embeddings(len(self.tokenizer))
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.tokenizer.padding_side = "left"
-        self.tokenizer.truncation_side = "left"
 
     def init_data_module(self):
         if self.config.data_module_choice == "ultra_feedback":

@@ -94,7 +94,6 @@ class SmDataset(pl.LightningDataModule):
         self.batch_size = batch_size
         self.tokenizer = tokenizer
         self.max_token_length = max_token_length
-        self.num_workers = min(len(os.sched_getaffinity(0)), 8)
         self.num_workers = 1
         current_dir = Path().resolve().name
         prefix = ""
