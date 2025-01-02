@@ -626,7 +626,6 @@ class CodeContests(HumanEval):
             problem = self.problems[i]
             best_completion, best_score = None, 0
             worst_completion, worst_score = None, sys.maxsize
-            self.console.print(completions_for_sample[0])
             if self.positive_completion_mode != PositiveMode.NO_COMPARISON:
                 for j, completion in enumerate(completions_for_sample):
                     if not completion:

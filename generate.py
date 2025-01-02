@@ -21,7 +21,7 @@ from synthetic_data.utils import DatasetFormat
 
 def main(
     upload_every_n_batches: int = 10,
-    batch_size: int = 16,
+    batch_size: int = 32,
     restart: bool = False,
     resume_input_position: bool = True,
     model: str = RemoteModel.GPT_4O_MINI.value,
