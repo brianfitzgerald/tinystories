@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import torch
 from datasets import load_dataset
@@ -21,12 +21,13 @@ from trl.trainer.sft_trainer import SFTTrainer
 
 from dataset.code import (
     CodeContestsDataModule,
-    ConversationDataModule,
     EvolCodeAlpacaDataModule,
     UltraFeedbackDataModule,
 )
+from dataset.conversation import ConversationDataModule
 from model.utils import (
     DataModuleChoice,
+    DatasetConfig,
     TuningModeChoice,
     ensure_directory,
     save_dataclass_to_json,
@@ -84,6 +85,10 @@ class WrapperConfig:
     save_steps: int = 500
     using_mistral: bool = False
     run_suffix: Optional[str] = None
+    special_tokens: Optional[List[str]] = None
+    # Only used for Conversation dataset format
+    input_dataset_name: Optional[str] = None
+    custom_chat_template: Optional[str] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -128,8 +133,23 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     tuning_mode="sft",
     learning_rate=1e-5,
     run_suffix="cot",
+    special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
+    input_dataset_name="codecontests_cot_sft_formatted_thoughts_conversations_v2.parquet",
 )
 
+PLAYWRIGHT_CONFIG = WrapperConfig(
+    model_id_or_path=MINISTRAL_8B,
+    wandb_project_name="playwright",
+    train_batch_size=4,
+    data_module_choice="conversation",
+    using_mistral=True,
+    tuning_mode="sft",
+    learning_rate=1e-5,
+    run_suffix="cot",
+    special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
+    input_dataset_name="screenplay_conversations.parquet",
+    custom_chat_template="ministral_8b",
+)
 
 
 CONFIGS = {
@@ -138,6 +158,7 @@ CONFIGS = {
     "codecontests": CODECONTESTS_CONFIG,
     "codecontests_sft": CODECONTESTS_SFT_CONFIG,
     "codecontests_cot": CODECONTESTS_COT_CONFIG,
+    "playwright": PLAYWRIGHT_CONFIG,
 }
 
 
@@ -152,11 +173,14 @@ class TrainerWrapper:
         )  # type: ignore
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
         # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
-        # self.model.resize_token_embeddings(len(self.tokenizer))
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
         self.tokenizer.truncation_side = "left"
-
+        if self.config.special_tokens is not None:
+            logger.info(f"Adding special tokens: {self.config.special_tokens}")
+            self.tokenizer.add_special_tokens(
+                {"additional_special_tokens": self.config.special_tokens}  # type: ignore
+            )  # type: ignore
 
     def init_model(self):
         bnb_config = None
@@ -179,37 +203,29 @@ class TrainerWrapper:
             ignore_mismatched_sizes=True,
             use_cache=not self.config.using_mistral,
         )
+        if self.config.special_tokens is not None:
+            logger.info(f"Resizing token embeddings for model to {len(self.tokenizer)}")
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
     def init_data_module(self):
-        if self.config.data_module_choice == "ultra_feedback":
-            self.data_module = UltraFeedbackDataModule(
-                self.config.max_samples,
-                DEFAULT_SYSTEM_MESSAGE if not self.config.using_mistral else None,
-            )
-        elif self.config.data_module_choice == "code_contests":
-            self.data_module = CodeContestsDataModule(
-                self.config.train_batch_size,
-                self.tokenizer,
-                self.config.max_sequence_length,
-                self.config.tuning_mode,
-            )
+        dataset_config = DatasetConfig(
+            input_dataset_name=self.config.input_dataset_name,
+            batch_size=self.config.train_batch_size,
+            max_sequence_length=self.config.max_sequence_length,
+            tuning_mode=self.config.tuning_mode,
+            max_samples=self.config.max_samples,
+            use_cache=not self.config.notebook_mode,
+            using_mistral=self.config.using_mistral,
+            custom_chat_template=self.config.custom_chat_template,
+        )
+        if self.config.data_module_choice == "code_contests":
+            self.data_module = CodeContestsDataModule(self.tokenizer, dataset_config)
         elif self.config.data_module_choice == "evol_codealpaca_dpo":
-            self.data_module = EvolCodeAlpacaDataModule(
-                self.config.train_batch_size,
-                self.tokenizer,
-                self.config.max_sequence_length,
-                self.config.tuning_mode,
-            )
+            self.data_module = EvolCodeAlpacaDataModule(self.tokenizer, dataset_config)
         elif self.config.data_module_choice == "conversation":
-            self.data_module = ConversationDataModule(
-                self.config.train_batch_size,
-                self.tokenizer,
-                self.config.max_sequence_length,
-                self.config.tuning_mode,
-            )
+            self.data_module = ConversationDataModule(self.tokenizer, dataset_config)
         if self.config.notebook_mode:
             self.data_module.num_workers = 1
-            self.data_module.use_cache = False
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):

@@ -25,7 +25,7 @@
             "args": [
                 "--notebook_mode",
                 "--config",
-                "codecontests_sft"
+                "playwright"
             ]
         },
         {

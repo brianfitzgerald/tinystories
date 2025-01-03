@@ -1,16 +1,12 @@
-from typing import List, Optional
+from typing import Optional
 
 from datasets import load_dataset
 from datasets.arrow_dataset import Dataset
 from loguru import logger
-from transformers.tokenization_utils import PreTrainedTokenizer
 import lightning.pytorch as pl
-from trl import DataCollatorForCompletionOnlyLM
-from rich.text import Text
-import torch.nn.functional as F
 
-from model.utils import SmDataset, TuningModeChoice
-from synthetic_data.utils import dictl, Conversation, ldictl
+from model.utils import SmDataset
+from synthetic_data.utils import dictl
 
 
 DPO_COLS_TO_TOKENIZE = ["chosen", "rejected", "prompt"]
@@ -20,7 +16,7 @@ class CodeContestsDataModule(SmDataset):
     def load_dataset(self):
         # Load dataset and split
         dataset = Dataset.from_parquet("codecontests_dpo_v2_filtered.parquet")
-        if self.max_samples:
+        if self.config.max_samples:
             dataset = dataset.select(range(self.max_samples))  # type: ignore
         dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -138,91 +134,3 @@ class EvolCodeAlpacaDataModule(SmDataset):
             ]
             out["conversations"].append(conv)
         return out
-
-
-class ConversationDataModule(SmDataset):
-    """
-    Generic data module for conversation datasets.
-    """
-
-    def __init__(
-        self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
-        tuning_mode: TuningModeChoice,
-        max_samples: Optional[int] = None,
-        use_cache: bool = True,
-    ):
-        super().__init__(
-            batch_size, tokenizer, max_token_length, tuning_mode, max_samples, use_cache
-        )
-        self.collator = DataCollatorForCompletionOnlyLM(
-            "assistant", tokenizer=tokenizer
-        )
-        self.train_on_inputs = False
-
-    def load_dataset(self):
-        # Load dataset and split
-        logger.info("Loading dataset")
-        dataset = Dataset.from_parquet(
-            "codecontests_cot_sft_formatted_thoughts_conversations.parquet"
-        )
-        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
-        self.train_dataset = dataset["train"]
-        self.val_dataset = dataset["test"]
-        self.messages_field = "conversation"
-
-    def post_setup(self):
-        self.train_dataset = self.train_dataset.remove_columns("conversation")
-        self.val_dataset = self.val_dataset.remove_columns("conversation")
-
-    def process_samples_batch_sft(self, examples: dict):
-        out = self.tokenize_conversation(examples["conversation"])
-        return out
-
-    def _tokenize_conversation(self, conversation: Conversation):
-        return self.tokenizer.apply_chat_template(
-            conversation,  # type: ignore
-            padding=True,
-        )
-
-    def tokenize_conversation(self, conversations: List[Conversation]):
-        tokenized_batch = []
-        for all_turns in conversations:
-            all_but_last_turn = all_turns[:-1]
-            prompt_ids = self._tokenize_conversation(all_but_last_turn)
-            all_turn_ids = self._tokenize_conversation(all_turns)
-            tokenized_prompt = {}
-            tokenized_prompt["input_ids"] = prompt_ids
-            tokenized_prompt["attention_mask"] = [1] * len(prompt_ids)
-
-            if not self.train_on_inputs:
-                user_prompt_len = len(prompt_ids)
-                input_ids = prompt_ids + all_turn_ids[user_prompt_len:]
-                labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]
-            else:
-                input_ids = all_turn_ids
-                labels = prompt_ids
-
-            tokenized_prompt["labels"] = labels
-            tokenized_prompt["input_ids"] = input_ids
-
-            tokenized_batch.append(tokenized_prompt)
-
-        batch = ldictl(tokenized_batch)
-        return batch
-
-    def visualize_sample(self, input_dict) -> Text:
-        input_ids = input_dict["input_ids"].squeeze().tolist()
-        labels = input_dict["labels"].squeeze().tolist()
-
-        rich_text = Text()
-
-        for token, label in zip(input_ids, labels):
-            decoded = self.tokenizer.decode(token)
-            if label == 0 or label == -100:
-                rich_text.append(decoded, style="bright_green")
-            else:
-                rich_text.append(decoded, style="bright_red")
-        return rich_text
