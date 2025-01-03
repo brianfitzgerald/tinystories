@@ -39,14 +39,16 @@ class ConversationDataModule(SmDataset):
     def _tokenize_conversation(self, conversation: Conversation):
         custom_template = None
         if self.config.custom_chat_template is not None:
-            with open(f"chat_templates/{self.config.custom_chat_template}.jinja") as f:
+            with open(
+                f"../chat_templates/{self.config.custom_chat_template}.jinja"
+            ) as f:
                 custom_template = f.read()
         return self.tokenizer.apply_chat_template(
             conversation,  # type: ignore
             chat_template=custom_template,
             truncation=True,
             padding=True,
-            max_length=self.config.max_sequence_length
+            max_length=self.config.max_sequence_length,
         )
 
     def tokenize_conversation(self, conversations: List[Conversation]):
@@ -55,25 +57,35 @@ class ConversationDataModule(SmDataset):
             all_but_last_turn = all_turns[:-1]
             prompt_ids = self._tokenize_conversation(all_but_last_turn)
             all_turn_ids = self._tokenize_conversation(all_turns)
+            attn_mask = [1] * len(prompt_ids)
             tokenized_prompt = {}
-            tokenized_prompt["input_ids"] = prompt_ids
-            tokenized_prompt["attention_mask"] = [1] * len(prompt_ids)
 
             if not self.train_on_inputs:
                 user_prompt_len = len(prompt_ids)
-                input_ids = prompt_ids + all_turn_ids[user_prompt_len:]  # type: ignore
-                labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]  # type: ignore
-                # TODO double check when not sleepy
-                if len(labels) < self.config.max_sequence_length:
-                    labels += [-100] * (self.config.max_sequence_length - len(labels))
+                input_ids = prompt_ids + all_turn_ids[user_prompt_len:]
+                labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]
+                if len(prompt_ids) < self.config.max_sequence_length:
+                    logger.warning(
+                        f"Prompt length {len(prompt_ids)} is less than max_sequence_length {self.config.max_sequence_length}, padding"
+                    )
+                    input_ids = input_ids + [0] * (
+                        self.config.max_sequence_length - len(input_ids)
+                    )
+                    labels = labels + [-100] * (
+                        self.config.max_sequence_length - len(labels)
+                    )
+                    attn_mask = attn_mask + [0] * (
+                        self.config.max_sequence_length - len(attn_mask)
+                    )
             else:
-                input_ids = all_turn_ids
-                labels = prompt_ids
+                labels = input_ids
 
             tokenized_prompt["labels"] = labels
             tokenized_prompt["input_ids"] = input_ids
+            tokenized_prompt["attention_mask"] = attn_mask
 
             tokenized_batch.append(tokenized_prompt)
+            # print([(len(v), k) for k, v in tokenized_prompt.items()])
 
         batch = ldictl(tokenized_batch)
         return batch

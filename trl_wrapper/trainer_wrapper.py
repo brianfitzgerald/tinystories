@@ -226,7 +226,6 @@ class TrainerWrapper:
             self.data_module = ConversationDataModule(self.tokenizer, dataset_config)
         if self.config.notebook_mode:
             self.data_module.num_workers = 1
-            self.data_module.config.use_cache = False
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):

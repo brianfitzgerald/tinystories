@@ -127,10 +127,13 @@ class SmDataset(pl.LightningDataModule):
         logger.info(f"Loading dataset for stage {stage}")
         ensure_directory(self.cache_dir, clear=False)
         logger.info(
-            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}"
+            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}, using cache: {self.config.use_cache}"
         )
 
-        self.load_dataset()
+        if not self.config.use_cache:
+            if Path(self.cache_dir).exists():
+                shutil.rmtree(self.cache_dir, ignore_errors=True)
+            self.load_dataset()
 
         assert self.train_dataset is not None
         assert self.val_dataset is not None
