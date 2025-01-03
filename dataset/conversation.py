@@ -40,7 +40,7 @@ class ConversationDataModule(SmDataset):
         custom_template = None
         if self.config.custom_chat_template is not None:
             with open(
-                f"../chat_templates/{self.config.custom_chat_template}.jinja"
+                f"chat_templates/{self.config.custom_chat_template}.jinja"
             ) as f:
                 custom_template = f.read()
         return self.tokenizer.apply_chat_template(
