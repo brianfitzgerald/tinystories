@@ -148,11 +148,16 @@ class OpenAIGenerationWrapper(GenerationWrapper):
 
 
 class VLLMWrapper(OpenAIGenerationWrapper):
-    def __init__(self, _: GenWrapperArgs) -> None:
+    def __init__(self, args: GenWrapperArgs) -> None:
         self.oai_client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
         )
         self.temperature = 0.4
+        self.model_name = args.model_id
+        self.n_retries = MAX_RETRIES
+        self.temperature = 0.2
+        self.max_tokens = 4096
+        self.args = args
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
@@ -260,6 +265,7 @@ class RemoteModel(str, Enum):
     DEEPSEEK_V3 = "deepseek-v3"
     GPT_4O_MINI = "gpt-4o-mini"
     MOCK = "mock"
+    VLLM = "vllm"
 
 
 @dataclass
@@ -279,9 +285,16 @@ MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
     ),
     RemoteModel.CLAUDE_3_5: RemoteModelChoice(AnthropicGenerationWrapper),
     RemoteModel.GPT_4O_MINI: RemoteModelChoice(
-        OpenAIGenerationWrapper, GenWrapperArgs(model_id="gpt-4o-mini", max_concurrent=32)
+        OpenAIGenerationWrapper,
+        GenWrapperArgs(model_id="gpt-4o-mini", max_concurrent=32),
     ),
     RemoteModel.MOCK: RemoteModelChoice(MockGenerator),
+    RemoteModel.VLLM: RemoteModelChoice(
+        VLLMWrapper,
+        GenWrapperArgs(
+            model_id="mistralai/Ministral-8B-Instruct-2410", max_concurrent=4
+        ),
+    ),
 }
 
 
