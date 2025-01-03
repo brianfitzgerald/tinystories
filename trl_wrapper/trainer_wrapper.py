@@ -88,6 +88,7 @@ class WrapperConfig:
     special_tokens: Optional[List[str]] = None
     # Only used for Conversation dataset format
     input_dataset_name: Optional[str] = None
+    custom_chat_template: Optional[str] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -139,7 +140,7 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
 PLAYWRIGHT_CONFIG = WrapperConfig(
     model_id_or_path=MINISTRAL_8B,
     wandb_project_name="playwright",
-    train_batch_size=16,
+    train_batch_size=8,
     data_module_choice="conversation",
     using_mistral=True,
     tuning_mode="sft",
@@ -147,6 +148,7 @@ PLAYWRIGHT_CONFIG = WrapperConfig(
     run_suffix="cot",
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="screenplay_conversations.parquet",
+    custom_chat_template="ministral_8b",
 )
 
 
@@ -209,10 +211,12 @@ class TrainerWrapper:
         dataset_config = DatasetConfig(
             input_dataset_name=self.config.input_dataset_name,
             batch_size=self.config.train_batch_size,
-            max_token_length=self.config.max_sequence_length,
+            max_sequence_length=self.config.max_sequence_length,
             tuning_mode=self.config.tuning_mode,
             max_samples=self.config.max_samples,
             use_cache=not self.config.notebook_mode,
+            using_mistral=self.config.using_mistral,
+            custom_chat_template=self.config.custom_chat_template,
         )
         if self.config.data_module_choice == "code_contests":
             self.data_module = CodeContestsDataModule(self.tokenizer, dataset_config)

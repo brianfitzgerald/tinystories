@@ -37,9 +37,16 @@ class ConversationDataModule(SmDataset):
         return out
 
     def _tokenize_conversation(self, conversation: Conversation):
+        custom_template = None
+        if self.config.custom_chat_template is not None:
+            with open(f"chat_templates/{self.config.custom_chat_template}.jinja") as f:
+                custom_template = f.read()
         return self.tokenizer.apply_chat_template(
             conversation,  # type: ignore
+            chat_template=custom_template,
+            truncation=True,
             padding=True,
+            max_length=self.config.max_sequence_length
         )
 
     def tokenize_conversation(self, conversations: List[Conversation]):
@@ -56,6 +63,9 @@ class ConversationDataModule(SmDataset):
                 user_prompt_len = len(prompt_ids)
                 input_ids = prompt_ids + all_turn_ids[user_prompt_len:]  # type: ignore
                 labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]  # type: ignore
+                # TODO double check when not sleepy
+                if len(labels) < self.config.max_sequence_length:
+                    labels += [-100] * (self.config.max_sequence_length - len(labels))
             else:
                 input_ids = all_turn_ids
                 labels = prompt_ids

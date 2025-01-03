@@ -80,11 +80,13 @@ def class_name_to_underscore(cls):
 @dataclass
 class DatasetConfig:
     batch_size: int
-    max_token_length: int
+    max_sequence_length: int
     tuning_mode: TuningModeChoice
+    using_mistral: bool
     input_dataset_name: Optional[str] = None
     max_samples: Optional[int] = None
     use_cache: bool = True
+    custom_chat_template: Optional[str] = None
 
 
 class SmDataset(pl.LightningDataModule):
@@ -185,7 +187,7 @@ class SmDataset(pl.LightningDataModule):
     def _tokenize(self, inputs: List[str], labels: List[str]) -> dict:
         inputs_tokenized = self.tokenizer(
             inputs,
-            max_length=self.config.max_token_length,
+            max_length=self.config.max_sequence_length,
             truncation=True,
             padding="max_length",
             return_tensors="pt",
@@ -193,7 +195,7 @@ class SmDataset(pl.LightningDataModule):
 
         labels_tokenized = self.tokenizer(
             labels,
-            max_length=self.config.max_token_length,
+            max_length=self.config.max_sequence_length,
             truncation=True,
             padding="max_length",
             return_tensors="pt",
