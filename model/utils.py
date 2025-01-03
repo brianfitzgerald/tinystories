@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import shutil
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -24,7 +23,9 @@ IGNORE_TOKEN_INDEX = -100
 PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
-DataModuleChoice = Literal["ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation"]
+DataModuleChoice = Literal[
+    "ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation"
+]
 TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora", "sft"]
 
 
@@ -76,24 +77,25 @@ def class_name_to_underscore(cls):
     return underscore_case
 
 
+@dataclass
+class DatasetConfig:
+    batch_size: int
+    max_token_length: int
+    tuning_mode: TuningModeChoice
+    input_dataset_name: Optional[str] = None
+    max_samples: Optional[int] = None
+    use_cache: bool = True
+
+
 class SmDataset(pl.LightningDataModule):
-    def __init__(
-        self,
-        batch_size: int,
-        tokenizer: PreTrainedTokenizer,
-        max_token_length: int,
-        tuning_mode: TuningModeChoice,
-        max_samples: Optional[int] = None,
-        use_cache: bool = True,
-    ):
+    def __init__(self, tokenizer: PreTrainedTokenizer, config: DatasetConfig):
         super().__init__()
 
-        self.max_samples = max_samples
+        self.config = config
+
         self.train_dataset = None
         self.val_dataset = None
-        self.batch_size = batch_size
         self.tokenizer = tokenizer
-        self.max_token_length = max_token_length
         self.num_workers = 1
         current_dir = Path().resolve().name
         prefix = ""
@@ -104,16 +106,16 @@ class SmDataset(pl.LightningDataModule):
         )
         logger.info(f"Cache dir: {self.cache_dir}")
         self.input_column, self.target_column = "context", "fields"
-        self.use_cache = use_cache
         self.train_dataset = None
         self.val_dataset = None
-        self.tuning_mode: TuningModeChoice = tuning_mode
         self.dataset_name = None
 
     def load_dataset(self):
         # Load dataset and split
-        assert self.dataset_name is not None, "Dataset name must be set, or override load_dataset"
-        dataset = load_dataset(self.dataset_name)[
+        assert (
+            self.dataset_name is not None
+        ), "Dataset name must be set, or override load_dataset"
+        dataset = load_dataset(self.config.input_dataset_name)[
             "train"
         ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -132,13 +134,13 @@ class SmDataset(pl.LightningDataModule):
         assert self.val_dataset is not None
 
         process_fn = self.process_samples_batch
-        if self.tuning_mode in ("sft", "sft_lora"):
+        if self.config.tuning_mode in ("sft", "sft_lora"):
             process_fn = self.process_samples_batch_sft
 
         self.train_dataset = self.train_dataset.map(
             process_fn,
             batched=True,
-            load_from_cache_file=self.use_cache,
+            load_from_cache_file=self.config.use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
             num_proc=self.num_workers,
         )
@@ -146,7 +148,7 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = self.val_dataset.map(
             process_fn,
             batched=True,
-            load_from_cache_file=self.use_cache,
+            load_from_cache_file=self.config.use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
             num_proc=self.num_workers,
         )
@@ -183,7 +185,7 @@ class SmDataset(pl.LightningDataModule):
     def _tokenize(self, inputs: List[str], labels: List[str]) -> dict:
         inputs_tokenized = self.tokenizer(
             inputs,
-            max_length=self.max_token_length,
+            max_length=self.config.max_token_length,
             truncation=True,
             padding="max_length",
             return_tensors="pt",
@@ -191,7 +193,7 @@ class SmDataset(pl.LightningDataModule):
 
         labels_tokenized = self.tokenizer(
             labels,
-            max_length=self.max_token_length,
+            max_length=self.config.max_token_length,
             truncation=True,
             padding="max_length",
             return_tensors="pt",
@@ -205,7 +207,9 @@ class SmDataset(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers
+            self.train_dataset,
+            batch_size=self.config.batch_size,
+            num_workers=self.num_workers,
         )  # type: ignore
 
     def val_dataloader(self):
