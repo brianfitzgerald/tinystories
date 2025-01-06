@@ -2,8 +2,8 @@ from typing import List
 
 from datasets.arrow_dataset import Dataset
 from loguru import logger
-from transformers.tokenization_utils import PreTrainedTokenizer
 from rich.text import Text
+from transformers.tokenization_utils import PreTrainedTokenizer
 
 from model.utils import DatasetConfig, SmDataset
 from synthetic_data.utils import Conversation, ldictl
@@ -16,13 +16,16 @@ class ConversationDataModule(SmDataset):
 
     def __init__(self, tokenizer: PreTrainedTokenizer, config: DatasetConfig):
         super().__init__(tokenizer, config)
-        self.train_on_inputs = False
+        self.train_on_inputs = config.train_on_inputs
 
     def load_dataset(self):
         # Load dataset and split
         logger.info("Loading dataset")
         assert self.config.input_dataset_name is not None
-        dataset = Dataset.from_parquet(self.config.input_dataset_name)
+        dataset_location = self.config.input_dataset_name
+        if self.config.notebook_mode:
+            dataset_location = f"../{dataset_location}"
+        dataset = Dataset.from_parquet(dataset_location)
         dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
@@ -36,12 +39,10 @@ class ConversationDataModule(SmDataset):
         out = self.tokenize_conversation(examples["conversation"])
         return out
 
-    def _tokenize_conversation(self, conversation: Conversation):
+    def _tokenize_conversation(self, conversation: Conversation) -> List[int]:
         custom_template = None
         if self.config.custom_chat_template is not None:
-            with open(
-                f"chat_templates/{self.config.custom_chat_template}.jinja"
-            ) as f:
+            with open(f"chat_templates/{self.config.custom_chat_template}.jinja") as f:
                 custom_template = f.read()
         return self.tokenizer.apply_chat_template(
             conversation,  # type: ignore
@@ -56,18 +57,24 @@ class ConversationDataModule(SmDataset):
         for all_turns in conversations:
             all_but_last_turn = all_turns[:-1]
             prompt_ids = self._tokenize_conversation(all_but_last_turn)
-            all_turn_ids = self._tokenize_conversation(all_turns)
+            all_turn_ids: List[int] = self._tokenize_conversation(all_turns)
             attn_mask = [1] * len(prompt_ids)
             tokenized_prompt = {}
+            input_ids = []
 
-            if not self.train_on_inputs:
+            if self.train_on_inputs:
+                labels = all_turn_ids
+                input_ids = all_turn_ids
+            else:
                 user_prompt_len = len(prompt_ids)
-                input_ids = prompt_ids + all_turn_ids[user_prompt_len:]
-                labels = [-100] * user_prompt_len + all_turn_ids[user_prompt_len:]
+                input_ids: List[int] = prompt_ids + all_turn_ids[user_prompt_len:]  # type: ignore
+                labels: List[int] = [-100] * user_prompt_len + all_turn_ids[
+                    user_prompt_len:
+                ]  # type: ignore
                 if len(prompt_ids) < self.config.max_sequence_length:
-                    logger.warning(
-                        f"Prompt length {len(prompt_ids)} is less than max_sequence_length {self.config.max_sequence_length}, padding"
-                    )
+                    # logger.warning(
+                    #     f"Prompt length {len(prompt_ids)} is less than max_sequence_length {self.config.max_sequence_length}, padding"
+                    # )
                     input_ids = input_ids + [0] * (
                         self.config.max_sequence_length - len(input_ids)
                     )
@@ -77,8 +84,6 @@ class ConversationDataModule(SmDataset):
                     attn_mask = attn_mask + [0] * (
                         self.config.max_sequence_length - len(attn_mask)
                     )
-            else:
-                labels = input_ids
 
             tokenized_prompt["labels"] = labels
             tokenized_prompt["input_ids"] = input_ids
@@ -99,7 +104,7 @@ class ConversationDataModule(SmDataset):
         for token, label in zip(input_ids, labels):
             decoded = self.tokenizer.decode(token)
             if label == 0 or label == -100:
-                rich_text.append(decoded, style="bright_green")
-            else:
                 rich_text.append(decoded, style="bright_red")
+            else:
+                rich_text.append(decoded, style="bright_green")
         return rich_text

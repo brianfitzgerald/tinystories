@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 import torch
 from datasets import load_dataset
@@ -22,7 +22,6 @@ from trl.trainer.sft_trainer import SFTTrainer
 from dataset.code import (
     CodeContestsDataModule,
     EvolCodeAlpacaDataModule,
-    UltraFeedbackDataModule,
 )
 from dataset.conversation import ConversationDataModule
 from model.utils import (
@@ -124,18 +123,6 @@ CODECONTESTS_SFT_CONFIG = WrapperConfig(
     learning_rate=1e-5,
 )
 
-CODECONTESTS_COT_CONFIG = WrapperConfig(
-    model_id_or_path=LLAMA_3_2_3B,
-    wandb_project_name="codecontests-ministral-8b",
-    train_batch_size=16,
-    data_module_choice="conversation",
-    tuning_mode="sft",
-    learning_rate=1e-5,
-    run_suffix="cot",
-    special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
-    input_dataset_name="codecontests_cot_sft_formatted_thoughts_conversations_v2.parquet",
-)
-
 PLAYWRIGHT_CONFIG = WrapperConfig(
     model_id_or_path=MINISTRAL_8B,
     wandb_project_name="playwright",
@@ -151,12 +138,26 @@ PLAYWRIGHT_CONFIG = WrapperConfig(
 )
 
 
+CODECONTESTS_COT_CONFIG = WrapperConfig(
+    model_id_or_path=LLAMA_3_2_3B,
+    wandb_project_name="codecontests-ministral-8b",
+    train_batch_size=16,
+    data_module_choice="conversation",
+    tuning_mode="sft",
+    learning_rate=1e-5,
+    train_on_inputs=False,
+    run_suffix="cot",
+    special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
+    input_dataset_name="codecontests_cot_sft_formatted_thoughts_conversations.parquet",
+)
+
+
 CONFIGS = {
     "llama": LLAMA_CONFIG,
     "dolphin": DOLPHIN_DPO_CONFIG,
     "codecontests": CODECONTESTS_CONFIG,
     "codecontests_sft": CODECONTESTS_SFT_CONFIG,
-    "codecontests_cot": CODECONTESTS_COT_CONFIG,
+    "codecontests_cot_sft": CODECONTESTS_COT_CONFIG,
     "playwright": PLAYWRIGHT_CONFIG,
 }
 
@@ -211,11 +212,12 @@ class TrainerWrapper:
             input_dataset_name=self.config.input_dataset_name,
             batch_size=self.config.train_batch_size,
             max_sequence_length=self.config.max_sequence_length,
+            using_mistral=self.config.using_mistral,
+            notebook_mode=self.config.notebook_mode,
             tuning_mode=self.config.tuning_mode,
             max_samples=self.config.max_samples,
-            use_cache=not self.config.notebook_mode,
-            using_mistral=self.config.using_mistral,
             custom_chat_template=self.config.custom_chat_template,
+            train_on_inputs=self.config.train_on_inputs,
         )
         if self.config.data_module_choice == "code_contests":
             self.data_module = CodeContestsDataModule(self.tokenizer, dataset_config)
@@ -239,6 +241,7 @@ class TrainerWrapper:
             run_name += f"-{self.config.run_suffix}"
 
         output_dir = f"/weka/home-brianf/runs/{run_name}"
+        logger.info(f"Saving output to: {output_dir}")
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
 

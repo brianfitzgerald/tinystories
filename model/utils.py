@@ -83,10 +83,11 @@ class DatasetConfig:
     max_sequence_length: int
     tuning_mode: TuningModeChoice
     using_mistral: bool
+    notebook_mode: bool
     input_dataset_name: Optional[str] = None
     max_samples: Optional[int] = None
-    use_cache: bool = True
     custom_chat_template: Optional[str] = None
+    train_on_inputs: bool = False
 
 
 class SmDataset(pl.LightningDataModule):
@@ -117,7 +118,7 @@ class SmDataset(pl.LightningDataModule):
         assert (
             self.dataset_name is not None
         ), "Dataset name must be set, or override load_dataset"
-        dataset = load_dataset(self.config.input_dataset_name)[ # type: ignore
+        dataset = load_dataset(self.config.input_dataset_name)[  # type: ignore
             "train"
         ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -126,11 +127,13 @@ class SmDataset(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
         ensure_directory(self.cache_dir, clear=False)
+        use_cache = not self.config.notebook_mode
         logger.info(
-            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}, using cache: {self.config.use_cache}"
+            f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}, using cache: {use_cache}"
         )
 
-        if not self.config.use_cache:
+
+        if not use_cache:
             # remove cache if not being used, to avoid stale data
             if Path(self.cache_dir).exists():
                 shutil.rmtree(self.cache_dir, ignore_errors=True)
@@ -138,7 +141,9 @@ class SmDataset(pl.LightningDataModule):
 
         assert self.train_dataset is not None
         assert self.val_dataset is not None
-        logger.info(f"Train dataset size: {len(self.train_dataset)} Val dataset size: {len(self.val_dataset)}")
+        logger.info(
+            f"Train dataset size: {len(self.train_dataset)} Val dataset size: {len(self.val_dataset)}"
+        )
 
         process_fn = self.process_samples_batch
         if self.config.tuning_mode in ("sft", "sft_lora"):
@@ -147,7 +152,7 @@ class SmDataset(pl.LightningDataModule):
         self.train_dataset = self.train_dataset.map(
             process_fn,
             batched=True,
-            load_from_cache_file=self.config.use_cache,
+            load_from_cache_file=use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
             num_proc=self.num_workers,
         )
@@ -155,7 +160,7 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = self.val_dataset.map(
             process_fn,
             batched=True,
-            load_from_cache_file=self.config.use_cache,
+            load_from_cache_file=use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
             num_proc=self.num_workers,
         )
