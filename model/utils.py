@@ -117,7 +117,7 @@ class SmDataset(pl.LightningDataModule):
         assert (
             self.dataset_name is not None
         ), "Dataset name must be set, or override load_dataset"
-        dataset = load_dataset(self.config.input_dataset_name)[
+        dataset = load_dataset(self.config.input_dataset_name)[ # type: ignore
             "train"
         ].train_test_split(test_size=0.01)  # type: ignore
         self.train_dataset = dataset["train"]
@@ -131,12 +131,14 @@ class SmDataset(pl.LightningDataModule):
         )
 
         if not self.config.use_cache:
+            # remove cache if not being used, to avoid stale data
             if Path(self.cache_dir).exists():
                 shutil.rmtree(self.cache_dir, ignore_errors=True)
             self.load_dataset()
 
         assert self.train_dataset is not None
         assert self.val_dataset is not None
+        logger.info(f"Train dataset size: {len(self.train_dataset)} Val dataset size: {len(self.val_dataset)}")
 
         process_fn = self.process_samples_batch
         if self.config.tuning_mode in ("sft", "sft_lora"):

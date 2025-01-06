@@ -125,11 +125,10 @@ CODECONTESTS_SFT_CONFIG = WrapperConfig(
 )
 
 CODECONTESTS_COT_CONFIG = WrapperConfig(
-    model_id_or_path=MISTRAL_7B,
+    model_id_or_path=LLAMA_3_2_3B,
     wandb_project_name="codecontests-ministral-8b",
     train_batch_size=16,
-    data_module_choice="evol_codealpaca_dpo",
-    using_mistral=True,
+    data_module_choice="conversation",
     tuning_mode="sft",
     learning_rate=1e-5,
     run_suffix="cot",
