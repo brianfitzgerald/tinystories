@@ -26,9 +26,9 @@ class ConversationDataModule(SmDataset):
         assert self.config.input_dataset_name is not None
         input_dataset_name = self.config.input_dataset_name
         model_name = self.tokenizer.name_or_path
-        if os.path.exists(self.config.input_dataset_name):
+        if os.path.isfile(self.config.input_dataset_name):
             input_dataset_name = os.path.basename(self.config.input_dataset_name)
-        self.cache_dir = f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}//{input_dataset_name}"
+        self.cache_dir = f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}/{model_name}/{input_dataset_name}"
         logger.info(f"Cache dir: {self.cache_dir}")
         self.train_on_inputs = config.train_on_inputs
 
