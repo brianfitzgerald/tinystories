@@ -14,4 +14,4 @@ export WANDB_BASE_URL=https://api.wandb.ai
 echo "Visible CUDA devices: $CUDA_VISIBLE_DEVICES"
 echo "WANDB base URL: $WANDB_BASE_URL"
 
-python train_trl.py --config codecontests_cot_sft --wandb --comment "train-on-inputs"
+python train_trl.py --config codecontests_cot_sft --wandb --comment "openo1-composite"

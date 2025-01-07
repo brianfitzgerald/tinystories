@@ -142,10 +142,9 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     data_module_choice="conversation",
     tuning_mode="sft",
     learning_rate=1e-5,
-    train_on_inputs=True,
-    run_suffix="cot",
+    train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
-    input_dataset_name="codecontests_cot_sft_formatted_thoughts_conversations.parquet",
+    input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
 )
 
 
