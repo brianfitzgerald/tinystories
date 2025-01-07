@@ -45,9 +45,6 @@ MISTRAL_7B = "mistralai/Mistral-7B-Instruct-v0.3"
 MINISTRAL_8B = "mistralai/Ministral-8B-Instruct-2410"
 
 
-DEFAULT_SYSTEM_MESSAGE = "You are a helpful AI assistant."
-
-
 @dataclass
 class WrapperConfig:
     model_id_or_path: str = LLAMA_3_2_1B
@@ -64,7 +61,7 @@ class WrapperConfig:
     root_dir: Optional[str] = None
     data_module_choice: DataModuleChoice = "ultra_feedback"
     wandb_project_name: str = "codecontests-llama-3b"
-    n_epochs: int = 1
+    n_epochs: int = 10
     max_eval_dataset_size: Optional[int] = None
     # SFT only
     train_on_inputs: bool = True
@@ -145,7 +142,7 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     data_module_choice="conversation",
     tuning_mode="sft",
     learning_rate=1e-5,
-    train_on_inputs=False,
+    train_on_inputs=True,
     run_suffix="cot",
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="codecontests_cot_sft_formatted_thoughts_conversations.parquet",
@@ -225,8 +222,6 @@ class TrainerWrapper:
             self.data_module = EvolCodeAlpacaDataModule(self.tokenizer, dataset_config)
         elif self.config.data_module_choice == "conversation":
             self.data_module = ConversationDataModule(self.tokenizer, dataset_config)
-        if self.config.notebook_mode:
-            self.data_module.num_workers = 1
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):
@@ -235,10 +230,10 @@ class TrainerWrapper:
         random_id = int(torch.rand(1) * 1000000)
         model_id_without_org = self.config.model_id_or_path.split("/")[-1].lower()
         run_name = f"run-{simple_date}-{random_id}-{self.config.data_module_choice}-{self.config.tuning_mode}-{model_id_without_org}"
-        if comment is not None:
-            run_name += f"-{comment}"
         if self.config.run_suffix is not None:
             run_name += f"-{self.config.run_suffix}"
+        if comment is not None:
+            run_name += f"-{comment}"
 
         output_dir = f"/weka/home-brianf/runs/{run_name}"
         logger.info(f"Saving output to: {output_dir}")

@@ -99,7 +99,7 @@ class SmDataset(pl.LightningDataModule):
         self.train_dataset = None
         self.val_dataset = None
         self.tokenizer = tokenizer
-        self.num_workers = 1
+        self.num_workers = 1 if config.notebook_mode else 4
         current_dir = Path().resolve().name
         prefix = ""
         if current_dir == "notebooks":
@@ -132,12 +132,7 @@ class SmDataset(pl.LightningDataModule):
             f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}, using cache: {use_cache}"
         )
 
-
-        if not use_cache:
-            # remove cache if not being used, to avoid stale data
-            if Path(self.cache_dir).exists():
-                shutil.rmtree(self.cache_dir, ignore_errors=True)
-            self.load_dataset()
+        self.load_dataset()
 
         assert self.train_dataset is not None
         assert self.val_dataset is not None

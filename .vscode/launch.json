@@ -23,7 +23,6 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "--notebook_mode",
                 "--config",
                 "codecontests_cot_sft"
             ]
