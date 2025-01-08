@@ -87,7 +87,7 @@ class BaseTask(ABC):
         """
         raise NotImplementedError
 
-    def format_output_rows(self, completions: List[str]) -> List[Dict]:
+    def format_output_rows(self, completions: List[str]) -> List:
         """
         Take the completed conversation and format it into the final dataset format.
         """
