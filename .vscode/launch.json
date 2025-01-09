@@ -40,5 +40,15 @@
                 "01-09-2-54-527680-llama-3.2-3b-instruct-openo1-composite",
             ]
         },
+        {
+            "name": "Gradio UI",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run_inference.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+            ]
+        },
     ]
 }
