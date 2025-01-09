@@ -24,7 +24,8 @@
             "justMyCode": false,
             "args": [
                 "--config",
-                "codecontests_cot_sft"
+                "codecontests_cot_sft",
+                "--notebook_mode"
             ]
         },
         {
