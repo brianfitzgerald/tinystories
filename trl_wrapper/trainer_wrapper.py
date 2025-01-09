@@ -134,14 +134,17 @@ PLAYWRIGHT_CONFIG = WrapperConfig(
     custom_chat_template="ministral_8b",
 )
 
+# llama 3 hparams
+# https://huggingface.co/blog/llama3#fine-tuning-with-🤗-trl
 
 CODECONTESTS_COT_CONFIG = WrapperConfig(
     model_id_or_path=LLAMA_3_2_3B,
     wandb_project_name="codecontests-ministral-8b",
-    train_batch_size=16,
+    train_batch_size=4,
+    gradient_checkpointing=True,
     data_module_choice="conversation",
     tuning_mode="sft",
-    learning_rate=1e-5,
+    learning_rate=1e-4,
     train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
@@ -228,7 +231,7 @@ class TrainerWrapper:
         simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
         random_id = int(torch.rand(1) * 1000000)
         model_id_without_org = self.config.model_id_or_path.split("/")[-1].lower()
-        run_name = f"run-{simple_date}-{random_id}-{self.config.data_module_choice}-{self.config.tuning_mode}-{model_id_without_org}"
+        run_name = f"{simple_date}-{random_id}-{self.config.tuning_mode}-{self.config.data_module_choice}-{model_id_without_org}"
         if self.config.run_suffix is not None:
             run_name += f"-{self.config.run_suffix}"
         if comment is not None:
@@ -284,7 +287,7 @@ class TrainerWrapper:
                 save_steps=self.config.save_steps,
                 save_total_limit=2,
                 eval_strategy="steps",
-                eval_on_start=True,
+                eval_on_start=False,
                 eval_steps=self.config.eval_steps,
                 bf16=True,
                 tf32=False,
