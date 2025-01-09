@@ -552,13 +552,13 @@ class CodeContests(HumanEval):
             "exec",
             "test",
         ),
-        EvalTask(
-            "humaneval",
-            "google-research-datasets/mbpp",
-            "mbpp",
-            "ast",
-            "train",
-        ),
+        # EvalTask(
+        #     "humaneval",
+        #     "google-research-datasets/mbpp",
+        #     "mbpp",
+        #     "ast",
+        #     "train",
+        # ),
     ]
 
     def __init__(self, console: Console) -> None:
@@ -590,8 +590,11 @@ class CodeContests(HumanEval):
                 raise ValueError(
                     f"Invalid code task format: {eval_task.code_task_format}"
                 )
-            return format_codecontests_generation_prompt(problem.prompt, fn_name)
-        return format_codecontests_generation_prompt(sample["description"], None)
+            conv = format_codecontests_generation_prompt(problem.prompt, fn_name)
+            return [{"role": "user", "content": f"Write the body of a function called {problem.entry_point}. Explain your reasoning."}]
+        else:
+            conv = format_codecontests_generation_prompt(sample["description"], None)
+        return conv
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
         input_batch = dictl(batch)

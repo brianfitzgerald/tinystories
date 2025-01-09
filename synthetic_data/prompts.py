@@ -389,7 +389,7 @@ def format_codecontests_generation_prompt(
     conv: Conversation = [
         {
             "role": "system",
-            "content": f"You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
+            "content": "You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
         },
         {
             "role": "user",
@@ -409,7 +409,7 @@ def format_codecontests_cot_generation_prompt(
     conv: Conversation = [
         {
             "role": "system",
-            "content": f"You are an expert system that answers coding questions. Describe in detail your reasoning behind each answer, then give the final answer. Do not give any example outputs or tests. Return code in Markdown snippets. Return the output instead of writing to stdout.",
+            "content": "You are an expert system that answers coding questions. Describe in detail your reasoning behind each answer, then give the final answer. Do not give any example outputs or tests. Return code in Markdown snippets. Return the output instead of writing to stdout.",
         },
         {
             "role": "user",

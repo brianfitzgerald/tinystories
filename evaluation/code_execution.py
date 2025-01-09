@@ -345,6 +345,7 @@ def evaluate_codecontests(
     results_batch: List[EvalResult] = []
     for result, sample_dict in generation_results:
         for generated in result:
+            console.print(generated)
             full_code = generated
             code_snippets = extract_code_block(generated, "python")
             if len(code_snippets) == 0:
@@ -365,13 +366,13 @@ def evaluate_codecontests(
                 raise ValueError("Invalid code task format")
             full_code = generated_code + "\n" + tests + "\ncheck()"
             console.print(f"Evaluating sample: {sample.task_id}")
-            console.print(f"Canonical solution:")
+            console.print("Canonical solution:")
             print_code_snippet(sample.canonical_solution, console)
             prompt = "" if sample.prompt == "text" else sample.prompt
             exec_err, evaluation_results = evaluate_sample_ast(full_code, n_asserts)
-            console.print(f"Generated solution:")
+            console.print("Generated solution:")
             print_code_snippet(generated_code, console)
-            console.print(f"Test code:")
+            console.print("Test code:")
             print_code_snippet(sample.test, console)
             _print_test_results(exec_err, evaluation_results, console)
             console.print("=" * console.size.width)
