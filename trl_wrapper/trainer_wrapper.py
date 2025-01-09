@@ -62,7 +62,7 @@ class WrapperConfig:
     root_dir: Optional[str] = None
     data_module_choice: DataModuleChoice = "ultra_feedback"
     wandb_project_name: str = "codecontests-llama-3b"
-    n_epochs: int = 10
+    n_epochs: int = 1
     max_eval_dataset_size: Optional[int] = None
     # SFT only
     train_on_inputs: bool = True
@@ -144,7 +144,8 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     train_batch_size=4,
     data_module_choice="conversation_raw",
     tuning_mode="sft",
-    learning_rate=2e-4,
+    learning_rate=1e-4,
+    n_epochs=2,
     train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
