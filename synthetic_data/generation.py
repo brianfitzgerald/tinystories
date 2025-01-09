@@ -1,3 +1,4 @@
+import asyncio
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -154,10 +155,23 @@ class VLLMWrapper(OpenAIGenerationWrapper):
         )
         self.temperature = 0.4
         self.model_name = args.model_id
+        logger.info(f"Using model: {self.model_name}")
+        # If true, list models and call the first one listed
         self.n_retries = MAX_RETRIES
         self.temperature = 0.2
         self.max_tokens = 4096
         self.args = args
+        if args.model_id is None:
+            loop = asyncio.get_event_loop()
+            asyncio.run_coroutine_threadsafe(self._list_models(), loop)
+            logger.info(f"Using model: {self.model_name}")
+            self.model_name = "/weka/home-brianf/runs/run-01-07-22-47-122057-conversation-sft-llama-3.2-3b-instruct-openo1-composite/checkpoint-9030"
+
+    async def _list_models(self):
+        models_list = await self.oai_client.models.list()
+        model_ids = [m.id for m in models_list.data]
+        logger.info(f"Models: {model_ids}")
+        self.model_name = model_ids[0]
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
@@ -291,9 +305,7 @@ MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
     RemoteModel.MOCK: RemoteModelChoice(MockGenerator),
     RemoteModel.VLLM: RemoteModelChoice(
         VLLMWrapper,
-        GenWrapperArgs(
-            model_id="mistralai/Ministral-8B-Instruct-2410", max_concurrent=4
-        ),
+        GenWrapperArgs(max_concurrent=4),
     ),
 }
 
