@@ -13,6 +13,7 @@ from tqdm import tqdm
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.trainer_utils import SchedulerType
 from transformers.utils.quantization_config import BitsAndBytesConfig
 from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.dpo_trainer import PreferenceCollator
@@ -86,6 +87,7 @@ class WrapperConfig:
     # Only used for Conversation dataset format
     input_dataset_name: Optional[str] = None
     custom_chat_template: Optional[str] = None
+    lr_scheduler: SchedulerType = SchedulerType.CONSTANT
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -144,8 +146,8 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     train_batch_size=4,
     data_module_choice="conversation_raw",
     tuning_mode="sft",
-    learning_rate=1e-4,
-    n_epochs=2,
+    learning_rate=1e-5,
+    n_epochs=5,
     train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
@@ -285,12 +287,12 @@ class TrainerWrapper:
                 learning_rate=self.config.learning_rate,
                 max_grad_norm=self.config.max_grad_norm,
                 warmup_ratio=0.05,
-                lr_scheduler_type="constant",
+                lr_scheduler_type=self.config.lr_scheduler.value,
                 logging_steps=10,
                 save_steps=self.config.save_steps,
                 save_total_limit=2,
                 eval_strategy="steps",
-                eval_on_start=False,
+                eval_on_start=True,
                 eval_steps=self.config.eval_steps,
                 bf16=True,
                 tf32=True,
