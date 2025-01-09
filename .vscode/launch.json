@@ -24,15 +24,21 @@
             "justMyCode": false,
             "args": [
                 "--config",
-                "codecontests_cot_sft"
+                "codecontests_cot_sft",
+                "--notebook_mode"
             ]
         },
         {
-            "name": "Inference Server",
+            "name": "vLLM Server",
             "type": "debugpy",
             "request": "launch",
-            "program": "run_inference.py",
+            "program": "scripts/run_vllm.py",
             "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--run",
+                "01-09-2-54-527680-llama-3.2-3b-instruct-openo1-composite",
+            ]
         },
     ]
 }

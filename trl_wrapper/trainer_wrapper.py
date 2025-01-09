@@ -23,7 +23,7 @@ from dataset.code import (
     CodeContestsDataModule,
     EvolCodeAlpacaDataModule,
 )
-from dataset.conversation import ConversationDataModule
+from dataset.conversation import ConversationDataModule, ConversationRawDataModule
 from model.utils import (
     DataModuleChoice,
     DatasetConfig,
@@ -38,6 +38,7 @@ from trl_wrapper.dpo_trainer import CustomDPOTrainer, EvalDataModeChoice
 MOCK_LLAMA = "qgallouedec/tiny-LlamaForCausalLM-3"
 LLAMA_3_2_1B = "meta-llama/Llama-3.2-1B-Instruct"
 LLAMA_3_2_3B = "meta-llama/Llama-3.2-3B-Instruct"
+QWEN_2_5_3B = "Qwen/Qwen2.5-3B-Instruct"
 LLAMA_3_1_8B = "meta-llama/Llama-3.1-8B-Instruct"
 SMOL_LM_135M = "HuggingFaceTB/SmolLM2-135M-Instruct"
 # NOTE that mistral doesn't allow using system prompts, so it must be set to None.
@@ -134,14 +135,16 @@ PLAYWRIGHT_CONFIG = WrapperConfig(
     custom_chat_template="ministral_8b",
 )
 
+# llama 3 hparams
+# https://huggingface.co/blog/llama3#fine-tuning-with-🤗-trl
 
 CODECONTESTS_COT_CONFIG = WrapperConfig(
     model_id_or_path=LLAMA_3_2_3B,
     wandb_project_name="codecontests-ministral-8b",
-    train_batch_size=16,
-    data_module_choice="conversation",
+    train_batch_size=4,
+    data_module_choice="conversation_raw",
     tuning_mode="sft",
-    learning_rate=1e-5,
+    learning_rate=2e-4,
     train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
@@ -170,8 +173,8 @@ class TrainerWrapper:
         # https://github.com/huggingface/trl/issues/1311#issuecomment-2016614091
         # self.tokenizer.add_special_tokens({"pad_token": "<PAD>"})
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.tokenizer.padding_side = "left"
-        self.tokenizer.truncation_side = "left"
+        self.tokenizer.padding_side = "right"
+        self.tokenizer.truncation_side = "right"
         if self.config.special_tokens is not None:
             logger.info(f"Adding special tokens: {self.config.special_tokens}")
             self.tokenizer.add_special_tokens(
@@ -221,6 +224,8 @@ class TrainerWrapper:
             self.data_module = EvolCodeAlpacaDataModule(self.tokenizer, dataset_config)
         elif self.config.data_module_choice == "conversation":
             self.data_module = ConversationDataModule(self.tokenizer, dataset_config)
+        elif self.config.data_module_choice == "conversation_raw":
+            self.data_module = ConversationRawDataModule(self.tokenizer, dataset_config)
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):
@@ -228,7 +233,7 @@ class TrainerWrapper:
         simple_date = datetime.now().strftime("%m-%d-%-H-%-M")
         random_id = int(torch.rand(1) * 1000000)
         model_id_without_org = self.config.model_id_or_path.split("/")[-1].lower()
-        run_name = f"run-{simple_date}-{random_id}-{self.config.data_module_choice}-{self.config.tuning_mode}-{model_id_without_org}"
+        run_name = f"{simple_date}-{random_id}-{model_id_without_org}"
         if self.config.run_suffix is not None:
             run_name += f"-{self.config.run_suffix}"
         if comment is not None:
@@ -278,16 +283,16 @@ class TrainerWrapper:
                 optim="adamw_torch_fused",
                 learning_rate=self.config.learning_rate,
                 max_grad_norm=self.config.max_grad_norm,
-                warmup_ratio=0.1,
-                lr_scheduler_type="cosine",
+                warmup_ratio=0.05,
+                lr_scheduler_type="constant",
                 logging_steps=10,
                 save_steps=self.config.save_steps,
                 save_total_limit=2,
                 eval_strategy="steps",
-                eval_on_start=True,
+                eval_on_start=False,
                 eval_steps=self.config.eval_steps,
                 bf16=True,
-                tf32=False,
+                tf32=True,
                 push_to_hub=False,
                 report_to="wandb" if self.use_wandb else "none",
                 dataloader_num_workers=0 if self.config.notebook_mode else 4,

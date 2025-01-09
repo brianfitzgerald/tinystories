@@ -24,7 +24,7 @@ PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
 DataModuleChoice = Literal[
-    "ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation"
+    "ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation", "conversation_raw"
 ]
 TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora", "sft"]
 
@@ -214,7 +214,7 @@ class SmDataset(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.train_dataset, # type: ignore
             batch_size=self.config.batch_size,
             num_workers=self.num_workers,
         )  # type: ignore

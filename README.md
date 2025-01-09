@@ -5,9 +5,10 @@ Collection of experiments related to tuning small language models for specific t
 ## Installation
 
 ```bash
-python3.10 -m venv venv
+python3.13 -m venv venv
+pip install uv
 uv sync
-pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121 --no-build-isolation --force-reinstall
+uv pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121 --no-build-isolation --force-reinstall
 ```
 
 ## BitsandBytes
