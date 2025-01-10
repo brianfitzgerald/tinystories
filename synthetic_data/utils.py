@@ -241,6 +241,11 @@ def extract_code_block(msg: str, language: str = "python") -> List[str]:
     return blocks
 
 
+def extract_text_between_tags(input_text: str, tag_name: str):
+    pattern = rf"<{tag_name}>(.*?)(?:</{tag_name}>|$)"
+    return re.findall(pattern, input_text, re.DOTALL)
+
+
 async def gather_with_concurrency_limit(n: int, *coros):
     semaphore = asyncio.Semaphore(n)
 

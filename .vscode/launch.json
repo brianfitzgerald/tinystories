@@ -44,7 +44,7 @@
             "name": "Gradio UI",
             "type": "debugpy",
             "request": "launch",
-            "program": "run_inference.py",
+            "program": "gradio_ui.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [

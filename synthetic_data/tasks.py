@@ -576,6 +576,7 @@ class CodeContests(HumanEval):
             problem, fn_name = None, None
             if eval_task.code_task_format == "humaneval":
                 problem = HumanEvalProblem(**sample)
+                fn_name = problem.entry_point
             elif eval_task.code_task_format == "mbpp":
                 mbpp_problem = MBPPProblem(**sample)
                 problem = _convert_mbpp_to_humaneval(mbpp_problem)
@@ -590,10 +591,10 @@ class CodeContests(HumanEval):
                 raise ValueError(
                     f"Invalid code task format: {eval_task.code_task_format}"
                 )
-            conv = format_codecontests_generation_prompt(problem.prompt, fn_name)
-            return [{"role": "user", "content": f"Write the body of a function called {problem.entry_point}. Explain your reasoning."}]
+            conv = format_codecontests_cot_generation_prompt(problem.prompt, fn_name)
+            # return [{"role": "user", "content": f"Write the body of a function called {problem.entry_point}. Explain your reasoning."}]
         else:
-            conv = format_codecontests_generation_prompt(sample["description"], None)
+            conv = format_codecontests_cot_generation_prompt(sample["description"], None)
         return conv
 
     def format_input_conversation(self, batch: Dict) -> List[Conversation]:
