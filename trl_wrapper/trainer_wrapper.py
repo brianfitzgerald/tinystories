@@ -80,7 +80,7 @@ class WrapperConfig:
     tuning_mode: TuningModeChoice = "dpo_full"
     eval_data_mode: EvalDataModeChoice = "random"
     eval_steps: int = 500
-    save_steps: int = 500
+    save_steps: int = 1000
     using_mistral: bool = False
     run_suffix: Optional[str] = None
     special_tokens: Optional[List[str]] = None
@@ -88,6 +88,7 @@ class WrapperConfig:
     input_dataset_name: Optional[str] = None
     custom_chat_template: Optional[str] = None
     lr_scheduler: SchedulerType = SchedulerType.CONSTANT
+    neftune_noise_alpha: Optional[float] = None
 
 
 LLAMA_CONFIG = WrapperConfig(
@@ -146,12 +147,15 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
     train_batch_size=4,
     data_module_choice="conversation_raw",
     tuning_mode="sft",
-    learning_rate=1e-6,
+    gradient_checkpointing=False,
+    learning_rate=1e-5,
     n_epochs=10,
     train_on_inputs=False,
     special_tokens=["<thought>", "</thought>", "<solution>", "</solution>"],
     custom_chat_template="llama3",
     input_dataset_name="openo1_sft_formatted_thoughts_conversations.parquet",
+    neftune_noise_alpha=5,
+    lr_scheduler=SchedulerType.COSINE,
 )
 
 
@@ -287,7 +291,7 @@ class TrainerWrapper:
                 optim="adamw_torch_fused",
                 learning_rate=self.config.learning_rate,
                 max_grad_norm=self.config.max_grad_norm,
-                warmup_ratio=0.05,
+                warmup_ratio=0.1,
                 lr_scheduler_type=self.config.lr_scheduler.value,
                 logging_steps=10,
                 save_steps=self.config.save_steps,
@@ -307,6 +311,8 @@ class TrainerWrapper:
                 dataset_text_field="conversation",
                 output_dir=output_dir,
                 disable_tqdm=not self.config.notebook_mode,
+                neftune_noise_alpha=self.config.neftune_noise_alpha,
+                use_liger=True
             )
 
             self.trainer = SFTTrainer(
