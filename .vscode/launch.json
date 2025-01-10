@@ -37,7 +37,9 @@
             "justMyCode": false,
             "args": [
                 "--run",
-                "01-09-2-54-527680-llama-3.2-3b-instruct-openo1-composite",
+                "01-09-17-46-208302-llama-3.2-3b-instruct-openo1-composite-1e-5",
+                // "--model",
+                // "meta-llama/Llama-3.2-3B-Instruct"
             ]
         },
         {
