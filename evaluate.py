@@ -49,7 +49,7 @@ def _save_eval_results_to_csv(eval_results: List[EvalResult], out_dir: str):
 
 
 async def main(
-    batch_size: int = 4,
+    batch_size: int = 8,
     task_name: str = "codecontests",
     gen_source: str = RemoteModel.VLLM.value,
 ):

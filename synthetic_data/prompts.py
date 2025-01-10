@@ -1,4 +1,5 @@
-from typing import Optional
+import re
+from typing import Optional, List
 from synthetic_data.generation import Conversation
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_system_message_param import (
@@ -382,21 +383,31 @@ def format_humaneval_generation_prompt(fn_name: str, tests: str) -> Conversation
     ]
     return conv
 
+def extract_docstring(code: str) -> str:
+    docstring_pattern = r'"""(.*?)"""|\'\'\'(.*?)\'\'\''
+    match = re.search(docstring_pattern, code, re.DOTALL)
+    out = ""
+    if match:
+        # Return the captured group (ignoring None values for single or double quotes)
+        out = match.group(1) or match.group(2)
+    return out
+
 
 def format_codecontests_generation_prompt(
-    description: str, fn_name: Optional[str] = None
+    code_snippet: str, fn_name: Optional[str] = None
 ) -> Conversation:
+    docstring = extract_docstring(code_snippet)
     conv: Conversation = [
         {
             "role": "system",
-            "content": "You are participating in a coding contest. Your task is to solve the following problem. Return only code in Markdown snippets. Return the output instead of writing to stdout.",
+            "content": "Write code to solve the following problem in Python. Explain your reasoning. Return the output instead of writing to stdout.",
         },
         {
             "role": "user",
             "content": (
-                description
+                docstring
                 if not fn_name
-                else f"{description} Name the function `{fn_name}`."
+                else f"{docstring} Name the function `{fn_name}`."
             ),
         },
     ]
@@ -404,8 +415,9 @@ def format_codecontests_generation_prompt(
 
 
 def format_codecontests_cot_generation_prompt(
-    description: str, fn_name: Optional[str] = None
+    code_snippet: str, fn_name: Optional[str] = None
 ) -> Conversation:
+    docstring = extract_docstring(code_snippet)
     conv: Conversation = [
         {
             "role": "system",
@@ -413,7 +425,7 @@ def format_codecontests_cot_generation_prompt(
         },
         {
             "role": "user",
-            "content": f"Write Python code to solve the following problem: {description} Name the function `{fn_name}`.",
+            "content": f"Write Python code to solve the following problem: {docstring} Name the function `{fn_name}`.",
         },
     ]
     return conv

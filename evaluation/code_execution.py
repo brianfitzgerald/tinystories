@@ -17,7 +17,7 @@ import re
 import signal
 
 from evaluation.python_interpereter import evaluate_python_code_ast, LIST_SAFE_MODULES
-from synthetic_data.utils import extract_code_block
+from synthetic_data.utils import extract_code_block, extract_text_between_tags
 
 ALLOWED_FNS = {
     range,
@@ -349,9 +349,11 @@ def evaluate_codecontests(
             full_code = generated
             code_snippets = extract_code_block(generated, "python")
             if len(code_snippets) == 0:
-                logger.warning("No code snippets found in generated code")
-                continue
-            generated_code = code_snippets[0]
+                code_snippets = extract_text_between_tags(generated, "solution")
+                if len(code_snippets) == 0:
+                    logger.warning("No code snippets found in generated code")
+                    continue
+            generated_code = code_snippets[-1]
             if len(code_snippets) > 1:
                 logger.warning("Multiple code snippets found in generated code")
             if eval_task.code_task_format == "mbpp":

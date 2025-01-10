@@ -15,7 +15,7 @@ from datasets import Dataset, concatenate_datasets
 from dotenv import dotenv_values
 from huggingface_hub import login
 from loguru import logger
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 from openai.types.chat.chat_completion import ChatCompletion
 from wrapt_timeout_decorator import timeout
 
@@ -113,11 +113,17 @@ class OpenAIGenerationWrapper(GenerationWrapper):
         while True:
             completion_requests = []
             for conversation in conversations:
+                stop_tokens = [128001, 128008, 128009]
                 request = self.oai_client.chat.completions.create(
                     model=self.model_name,
                     messages=conversation,
                     temperature=self.temperature,
-                    # max_completion_tokens=self.max_tokens,
+                    max_completion_tokens=2048,
+                    stop=["</solution>"],
+                    extra_body={
+                        "stop_token_ids": stop_tokens,
+                        "skip_special_tokens": False,
+                    },
                 )
                 completion_requests.append(request)
             try:
@@ -148,10 +154,20 @@ class OpenAIGenerationWrapper(GenerationWrapper):
                     raise e
 
 
+def _get_model_id(base_url: str):
+    logger.info("Fetching models from OpenAI client")
+    sync_client = OpenAI(base_url=base_url)
+    all_models = sync_client.models.list()
+
+    logger.info(f"Models: {[x.id for x in all_models.data]}")
+    return all_models.data[0].id
+
+
 class VLLMWrapper(OpenAIGenerationWrapper):
     def __init__(self, args: GenWrapperArgs) -> None:
+        base_url = "http://localhost:8000/v1"
         self.oai_client = AsyncOpenAI(
-            base_url="http://localhost:8000/v1",
+            base_url=base_url,
         )
         self.temperature = 0.4
         self.model_name = args.model_id
@@ -162,16 +178,15 @@ class VLLMWrapper(OpenAIGenerationWrapper):
         self.max_tokens = 4096
         self.args = args
         if args.model_id is None:
-            loop = asyncio.get_event_loop()
-            asyncio.run_coroutine_threadsafe(self._list_models(), loop)
             logger.info(f"Using model: {self.model_name}")
-            self.model_name = "/weka/home-brianf/runs/run-01-07-22-47-122057-conversation-sft-llama-3.2-3b-instruct-openo1-composite/checkpoint-9030"
+            self.model_name = _get_model_id(base_url)
 
     async def _list_models(self):
         models_list = await self.oai_client.models.list()
         model_ids = [m.id for m in models_list.data]
         logger.info(f"Models: {model_ids}")
         self.model_name = model_ids[0]
+        logger.info(f"Using model ID: {self.model_name}")
 
 
 class OpenRouterGenerationWrapper(OpenAIGenerationWrapper):
@@ -305,7 +320,7 @@ MODEL_CONFIGS: dict[str, RemoteModelChoice] = {
     RemoteModel.MOCK: RemoteModelChoice(MockGenerator),
     RemoteModel.VLLM: RemoteModelChoice(
         VLLMWrapper,
-        GenWrapperArgs(max_concurrent=4),
+        GenWrapperArgs(max_concurrent=8),
     ),
 }
 
