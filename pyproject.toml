@@ -50,12 +50,13 @@ dependencies = [
     "einops",
     # add vllm if needed for evals
     "flash-attn; sys_platform == 'linux'",
-    "bitsandbytes>=0.44.1; sys_platform == 'linux'",
     "mistune>=3.1.0",
     "ruff>=0.8.1",
     "chardet>=5.2.0",
     "lightning>=2.5.0.post0",
-    "liger-kernel>=0.5.2",
+    # optional
+    # "bitsandbytes>=0.44.1; sys_platform == 'linux'",
+    # "liger-kernel>=0.5.2",
 ]
 
 [tool.uv.sources]

@@ -244,19 +244,6 @@ wheels = [
 ]
 
 [[package]]
-name = "bitsandbytes"
-version = "0.45.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy", marker = "sys_platform == 'linux'" },
-    { name = "torch", version = "2.5.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform == 'linux'" },
-    { name = "typing-extensions", marker = "sys_platform == 'linux'" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/9a/f41d252bf8b0bc5969b4dce1274cd04b7ddc541de1060dd27eca680bc1b2/bitsandbytes-0.45.0-py3-none-manylinux_2_24_x86_64.whl", hash = "sha256:0f0323de1ff1fdf8383e79bdad1283516a4c05a6fd2b44a363bf4e059422305b", size = 69084267 },
-]
-
-[[package]]
 name = "bleach"
 version = "6.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1258,20 +1245,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8d/5a/2e46392372517291fab9c0a05fb5aea377876d19f5db5755d005ffab3666/lib_detect_testenv-2.0.8.tar.gz", hash = "sha256:96527b3114727e70e80f671c204a225ae6aaaf117983f8fa4f56e542b2368d43", size = 27803 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/89/02e671d232234bfdd058e792d2e522255208bbcc59cf618c2a92e26114e4/lib_detect_testenv-2.0.8-py3-none-any.whl", hash = "sha256:86a2555d5919ba11f50226e99852b29eb6dfeee37228af77ae80114186a165b2", size = 8387 },
-]
-
-[[package]]
-name = "liger-kernel"
-version = "0.5.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "torch", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
-    { name = "torch", version = "2.5.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform != 'darwin'" },
-    { name = "triton" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/cb/5b6debc3fc29bb6a034446a0f1e90cfdfa246772edb6484c3c7db6e295d9/liger_kernel-0.5.2.tar.gz", hash = "sha256:784b5e74848d6802f52e38766bdc0241bf723040f8bf82b153485dd2c9ba0054", size = 70272 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/9e/b05809867d937dbcba4d8717197f69d05a1d41087e7a5c2fdbd5cae79c33/liger_kernel-0.5.2-py3-none-any.whl", hash = "sha256:31a7409ac9db20fc77e7caf8ab146f56d37d4a1d22e3cefd08661560a99d0c46", size = 104184 },
 ]
 
 [[package]]
@@ -2749,7 +2722,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "bitsandbytes", marker = "sys_platform == 'linux'" },
     { name = "chardet" },
     { name = "datacommons" },
     { name = "datacommons-pandas" },
@@ -2765,7 +2737,6 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "ipykernel" },
     { name = "kaggle" },
-    { name = "liger-kernel" },
     { name = "lightning" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -2805,7 +2776,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic" },
-    { name = "bitsandbytes", marker = "sys_platform == 'linux'", specifier = ">=0.44.1" },
     { name = "chardet", specifier = ">=5.2.0" },
     { name = "datacommons" },
     { name = "datacommons-pandas", specifier = ">=0.0.3" },
@@ -2821,7 +2791,6 @@ requires-dist = [
     { name = "huggingface-hub" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "kaggle" },
-    { name = "liger-kernel", specifier = ">=0.5.2" },
     { name = "lightning", specifier = ">=2.5.0.post0" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -3232,7 +3201,7 @@ name = "triton"
 version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "filelock" },
+    { name = "filelock", marker = "python_full_version < '3.13' and sys_platform == 'linux'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/86/17/d9a5cf4fcf46291856d1e90762e36cbabd2a56c7265da0d1d9508c8e3943/triton-3.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0f34f6e7885d1bf0eaaf7ba875a5f0ce6f3c13ba98f9503651c1e6dc6757ed5c", size = 209506424 },
