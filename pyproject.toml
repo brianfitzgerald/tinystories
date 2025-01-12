@@ -57,6 +57,8 @@ dependencies = [
     # optional
     # "bitsandbytes>=0.44.1; sys_platform == 'linux'",
     # "liger-kernel>=0.5.2",
+    "jsonlines>=4.0.0",
+    "kagglehub>=0.3.6",
 ]
 
 [tool.uv.sources]
