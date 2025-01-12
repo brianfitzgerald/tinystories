@@ -2,7 +2,6 @@ from trl import DPOTrainer
 import torch
 
 import random
-from typing import List, Optional
 import wandb
 from loguru import logger
 from typing import Dict, List, Optional, Tuple, Literal
@@ -93,7 +92,7 @@ class CustomDPOTrainer(DPOTrainer):
                         f"Generating reference samples, max length: {self.max_eval_sample_length}..."
                     )
                     assert self.ref_model is not None
-                    ref_output = self.ref_model.generate(  # type: ignore
+                    ref_output: torch.Tensor = self.ref_model.generate(  # type: ignore
                         input_ids=batch["prompt_input_ids"],
                         attention_mask=batch["prompt_attention_mask"],
                         pad_token_id=self.processing_class.pad_token_id,

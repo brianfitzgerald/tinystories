@@ -8,7 +8,7 @@ from typing import List, Literal, Optional, Union
 import re
 
 import lightning.pytorch as pl
-from datasets import load_dataset
+from datasets import Dataset
 from loguru import logger
 from torch.utils.data import DataLoader
 from torchmetrics.text.bleu import BLEUScore
@@ -24,7 +24,7 @@ PAD_TOKEN_ID = 0
 
 OptimizerChoice = Literal["AdamW", "Adafactor", "AdamW8bit"]
 DataModuleChoice = Literal[
-    "ultra_feedback", "code_contests", "evol_codealpaca_dpo", "conversation", "conversation_raw"
+    "ultra_feedback", "code_contests", "conversation", "conversation_dpo"
 ]
 TuningModeChoice = Literal["dpo_lora", "dpo_full", "sft_lora", "sft"]
 
@@ -101,11 +101,11 @@ class SmDataset(pl.LightningDataModule):
         self.tokenizer = tokenizer
         self.num_workers = 1 if config.notebook_mode else 4
         current_dir = Path().resolve().name
-        prefix = ""
+        self.prefix = ""
         if current_dir == "notebooks":
-            prefix = "../"
+            self.prefix = "../"
         self.cache_dir = (
-            f"{prefix}dataset_caches/{class_name_to_underscore(self.__class__)}"
+            f"{self.prefix}dataset_caches/{class_name_to_underscore(self.__class__)}"
         )
         logger.info(f"Cache dir: {self.cache_dir}")
         self.input_column, self.target_column = "context", "fields"
@@ -115,14 +115,22 @@ class SmDataset(pl.LightningDataModule):
 
     def load_dataset(self):
         # Load dataset and split
+        logger.info("Loading dataset")
         assert (
-            self.dataset_name is not None
-        ), "Dataset name must be set, or override load_dataset"
-        dataset = load_dataset(self.config.input_dataset_name)[  # type: ignore
-            "train"
-        ].train_test_split(test_size=0.01)  # type: ignore
+            self.config.input_dataset_name is not None
+        ), "Input dataset name must be set"
+        dataset = Dataset.from_parquet(f"{self.prefix}{self.config.input_dataset_name}")
+        dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
+        self.custom_template = None
+        if self.config.custom_chat_template is not None:
+            chat_template_path = (
+                f"{self.prefix}chat_templates/{self.config.custom_chat_template}.jinja"
+            )
+            logger.info(f"Loading custom chat template: {chat_template_path}")
+            with open(chat_template_path) as f:
+                self.custom_template = f.read()
 
     def setup(self, stage: Optional[str] = None):
         logger.info(f"Loading dataset for stage {stage}")
@@ -214,7 +222,7 @@ class SmDataset(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_dataset, # type: ignore
+            self.train_dataset,  # type: ignore
             batch_size=self.config.batch_size,
             num_workers=self.num_workers,
         )  # type: ignore

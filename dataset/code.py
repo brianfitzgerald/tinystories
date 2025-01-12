@@ -98,39 +98,3 @@ class UltraFeedbackDataModule(pl.LightningDataModule):
             for response_role in DPO_COLS_TO_TOKENIZE:
                 out_dict[response_role].append(triplets[response_role])
         return out_dict
-
-
-SFT_COLS = ["conversations"]
-
-
-class EvolCodeAlpacaDataModule(SmDataset):
-    def load_dataset(self):
-        # Load dataset and split
-        logger.info("Loading dataset")
-        dataset = load_dataset("AlekseyKorshuk/evol-codealpaca-v1-dpo")[
-            "train"
-        ].train_test_split(test_size=0.01)  # type: ignore
-        self.train_dataset = dataset["train"]
-        self.val_dataset = dataset["test"]
-
-    def process_samples_batch(self, examples):
-        batch_out = {
-            "chosen": examples["chosen"],
-            "rejected": examples["rejected"],
-            "prompt": examples["question"],
-        }
-        return batch_out
-
-    def process_samples_batch_sft(self, examples):
-        """
-        Convert to conversation format
-        """
-        out = {k: [] for k in SFT_COLS}
-        for i in range(len(examples["question"])):
-            system, question = examples["system"][i], examples["question"][i]
-            conv = [
-                {"role": "system", "content": system},
-                {"role": "user", "content": question},
-            ]
-            out["conversations"].append(conv)
-        return out
