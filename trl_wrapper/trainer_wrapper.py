@@ -159,11 +159,11 @@ CODECONTESTS_COT_CONFIG = WrapperConfig(
 
 CODECONTESTS_DPO_CONFIG = WrapperConfig(
     model_id_or_path="01-09-17-46-208302-llama-3.2-3b-instruct-openo1-composite-1e-5",
-    wandb_project_name="codecontests-ministral-8b",
+    wandb_project_name="codecontests-dpo",
     train_batch_size=4,
     data_module_choice="conversation_dpo",
     input_dataset_path="jondurbin/py-dpo-v0.1",
-    tuning_mode="dpo",
+    tuning_mode="dpo_lora",
     gradient_checkpointing=False,
     learning_rate=1e-5,
     n_epochs=1,
@@ -176,6 +176,7 @@ CONFIGS = {
     "codecontests": CODECONTESTS_CONFIG,
     "codecontests_sft": CODECONTESTS_SFT_CONFIG,
     "codecontests_cot_sft": CODECONTESTS_COT_CONFIG,
+    "codecontests_cot_dpo": CODECONTESTS_COT_CONFIG,
     "playwright": PLAYWRIGHT_CONFIG,
 }
 
