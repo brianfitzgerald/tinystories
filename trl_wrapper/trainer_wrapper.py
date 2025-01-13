@@ -23,7 +23,7 @@ from trl.trainer.sft_trainer import SFTTrainer
 from dataset.code import (
     CodeContestsDataModule,
 )
-from dataset.conversation import ConversationDataModule
+from dataset.conversation import ConversationDataModule, ConversationDPODataModule
 from model.utils import (
     DataModuleChoice,
     DatasetConfig,
@@ -161,9 +161,9 @@ CODECONTESTS_DPO_CONFIG = WrapperConfig(
     model_id_or_path="01-09-17-46-208302-llama-3.2-3b-instruct-openo1-composite-1e-5",
     wandb_project_name="codecontests-ministral-8b",
     train_batch_size=4,
-    data_module_choice="conversation",
+    data_module_choice="conversation_dpo",
     input_dataset_path="jondurbin/py-dpo-v0.1",
-    tuning_mode="sft",
+    tuning_mode="dpo",
     gradient_checkpointing=False,
     learning_rate=1e-5,
     n_epochs=1,
@@ -179,7 +179,9 @@ CONFIGS = {
     "playwright": PLAYWRIGHT_CONFIG,
 }
 
-RUNS_ROOT_FOLDER = "/weka/home-brianf/runs"
+REMOTE_RUNS_FOLDER = "/weka/home-brianf/runs"
+LOCAL_RUNS_FOLDER = "./runs"
+
 
 class TrainerWrapper:
     def __init__(self, config: WrapperConfig, use_wandb: bool = False) -> None:
@@ -212,9 +214,11 @@ class TrainerWrapper:
                 bnb_4bit_compute_dtype=torch.bfloat16,
             )
 
-        using_mps = torch.mps.is_available()
-        attn_impl = "sdpa" if using_mps else "flash_attention_2"
-        logger.info(f"Loading model {self.config.model_id_or_path} with attn_impl: {attn_impl}")
+        self.using_mps = torch.mps.is_available()
+        attn_impl = "sdpa" if self.using_mps else "flash_attention_2"
+        logger.info(
+            f"Loading model {self.config.model_id_or_path} with attn_impl: {attn_impl}"
+        )
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_id_or_path,
             device_map="auto",
@@ -244,6 +248,8 @@ class TrainerWrapper:
             self.data_module = CodeContestsDataModule(self.tokenizer, dataset_config)
         elif self.config.data_module_choice == "conversation":
             self.data_module = ConversationDataModule(self.tokenizer, dataset_config)
+        elif self.config.data_module_choice == "conversation_dpo":
+            self.data_module = ConversationDPODataModule(self.tokenizer, dataset_config)
         self.data_module.setup("fit")
 
     def init_trainer(self, comment: Optional[str] = None):
@@ -257,7 +263,13 @@ class TrainerWrapper:
         if comment is not None:
             run_name += f"-{comment}"
 
-        output_dir = os.path.join(RUNS_ROOT_FOLDER, run_name)
+        runs_folder = (
+            REMOTE_RUNS_FOLDER
+            if os.path.exists(REMOTE_RUNS_FOLDER)
+            else LOCAL_RUNS_FOLDER
+        )
+
+        output_dir = os.path.join(runs_folder, run_name)
         logger.info(f"Saving output to: {output_dir}")
 
         os.environ["WANDB_PROJECT"] = self.config.wandb_project_name
@@ -310,7 +322,7 @@ class TrainerWrapper:
                 eval_on_start=True,
                 eval_steps=self.config.eval_steps,
                 bf16=True,
-                tf32=True,
+                tf32=not self.using_mps,
                 push_to_hub=False,
                 report_to="wandb" if self.use_wandb else "none",
                 dataloader_num_workers=0 if self.config.notebook_mode else 4,
@@ -322,7 +334,7 @@ class TrainerWrapper:
                 output_dir=output_dir,
                 disable_tqdm=not self.config.notebook_mode,
                 neftune_noise_alpha=self.config.neftune_noise_alpha,
-                use_liger=True
+                use_liger=True,
             )
 
             self.trainer = SFTTrainer(

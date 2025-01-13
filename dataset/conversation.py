@@ -18,7 +18,7 @@ class ConversationDataModule(SmDataset):
         self.train_dataset = self.train_dataset.remove_columns("conversation")
         self.val_dataset = self.val_dataset.remove_columns("conversation")
 
-    def process_samples_batch_sft(self, examples: dict):  # type: ignore
+    def process_samples_batch(self, examples: dict):
         out = self._tokenize_conversation(examples["conversation"])
         return out
 
@@ -62,10 +62,7 @@ class ConversationDataModule(SmDataset):
         return rich_text
 
 
-SFT_COLS = ["conversations"]
-
-
-class ConversationDPODataModule(SmDataset):
+class ConversationDPODataModule(ConversationDataModule):
     """
     Conversation data module, assumes a dataset with `chosen`, `rejected`, and `prompt` columns.
     The columns are formatted into a conversation and tokenized.
@@ -75,6 +72,6 @@ class ConversationDPODataModule(SmDataset):
         batch_out = {
             "chosen": examples["chosen"],
             "rejected": examples["rejected"],
-            "prompt": examples["question"],
+            "prompt": examples["prompt"],
         }
         return batch_out

@@ -6,9 +6,10 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Literal, Optional, Union
 import re
+import os
 
 import lightning.pytorch as pl
-from datasets import Dataset
+from datasets import Dataset, load_dataset, DatasetDict
 from loguru import logger
 from torch.utils.data import DataLoader
 from torchmetrics.text.bleu import BLEUScore
@@ -113,13 +114,23 @@ class SmDataset(pl.LightningDataModule):
         self.val_dataset = None
         self.dataset_name = None
 
-    def load_dataset(self):
+    def init_dataset(self):
+        """
+        Cannot call load_dataset as that will shadow the load_dataset function from datasets
+        """
         # Load dataset and split
-        logger.info("Loading dataset")
         assert (
             self.config.input_dataset_name is not None
         ), "Input dataset name must be set"
-        dataset = Dataset.from_parquet(f"{self.prefix}{self.config.input_dataset_name}")
+        local_dataset_location = f"{self.prefix}{self.config.input_dataset_name}"
+        if os.path.exists(local_dataset_location):
+            logger.info(f"Loading local dataset from {local_dataset_location}")
+            dataset = Dataset.from_parquet(local_dataset_location)
+        else:
+            logger.info(f"Dataset not found at expected local location {local_dataset_location}, loading from remote: {self.config.input_dataset_name}")
+            dataset = load_dataset(self.config.input_dataset_name)
+            if isinstance(dataset, DatasetDict):
+                dataset = dataset["train"]
         dataset = dataset.train_test_split(test_size=0.1)  # type: ignore
         self.train_dataset = dataset["train"]
         self.val_dataset = dataset["test"]
@@ -140,7 +151,7 @@ class SmDataset(pl.LightningDataModule):
             f"Processing dataset for stage {stage}, workers: {self.num_workers}, cache dir {self.cache_dir}, using cache: {use_cache}"
         )
 
-        self.load_dataset()
+        self.init_dataset()
 
         assert self.train_dataset is not None
         assert self.val_dataset is not None
@@ -148,12 +159,8 @@ class SmDataset(pl.LightningDataModule):
             f"Train dataset size: {len(self.train_dataset)} Val dataset size: {len(self.val_dataset)}"
         )
 
-        process_fn = self.process_samples_batch
-        if self.config.tuning_mode in ("sft", "sft_lora"):
-            process_fn = self.process_samples_batch_sft
-
         self.train_dataset = self.train_dataset.map(
-            process_fn,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=use_cache,
             cache_file_name=f"{self.cache_dir}/training.parquet",
@@ -161,41 +168,18 @@ class SmDataset(pl.LightningDataModule):
         )
 
         self.val_dataset = self.val_dataset.map(
-            process_fn,
+            self.process_samples_batch,
             batched=True,
             load_from_cache_file=use_cache,
             cache_file_name=f"{self.cache_dir}/validation.parquet",
             num_proc=self.num_workers,
         )
 
-        if all(
-            [
-                x in self.train_dataset.column_names
-                for x in ["input_ids", "attention_mask", "labels"]
-            ]
-        ):
-            columns = [
-                "input_ids",
-                "attention_mask",
-                "labels",
-            ]
-
-            # Set format for PyTorch
-            self.train_dataset.set_format(type="torch", columns=columns)
-            self.val_dataset.set_format(type="torch", columns=columns)
-        else:
-            logger.warning(
-                f"Columns in dataset: {self.train_dataset.column_names} do not match torch columns, not setting format"
-            )
-
     def post_setup(self):
         pass
 
     def process_samples_batch(self, examples: dict):
         return self._tokenize(examples[self.input_column], examples[self.target_column])
-
-    def process_samples_batch_sft(self, examples: dict):
-        raise NotImplementedError("Subclass must implement this method")
 
     def _tokenize(self, inputs: List[str], labels: List[str]) -> dict:
         inputs_tokenized = self.tokenizer(
